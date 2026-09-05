@@ -72,9 +72,10 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   there was no technical reason to break from the toolchain already established elsewhere.
 - A single Fly.io app hosts both the built React client and the Sync Server — one deploy, one
   origin, no separate frontend host.
-- The server app (the Sync Server, and the natural home for the MCP Host — see Open Flags/Risks)
-  is written in Node.js/TypeScript, matching Yjs's native ecosystem (`y-websocket` and its
-  persistence adapters are Node-first) and the MCP TypeScript SDK.
+- The server app is written in Node.js/TypeScript, matching Yjs's native ecosystem (`y-websocket`
+  and its persistence adapters are Node-first) and the MCP TypeScript SDK. It hosts both the Sync
+  Server and the MCP Host in the same process — no reason to split them once MCP connections are
+  remote-HTTP-only, so one Fly.io app covers all of it.
 - The datastore is Redis (e.g. via Upstash) — holds the CRDT snapshot, the send log, the
   destination registry, and Purgatory's contents. Chosen over MongoDB because everything Dispatch
   Desk stores is simple key → value/blob access, not data that needs flexible cross-record
@@ -107,5 +108,5 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Open Flags / Risks
 
-- Whether the MCP Host runs as part of the same Node/TypeScript server process as the Sync Server
-  (the natural choice, since it's already on Fly.io) or separately isn't explicitly confirmed yet.
+_(none currently open — every flag raised so far has been decided; see `IDEAS.md` for deferred,
+not-yet-scheduled ideas like the local-machine MCP server.)_

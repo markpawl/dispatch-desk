@@ -45,10 +45,10 @@ This file documents the app's components.
   destination, dispatches selected text to whichever one is chosen, and powers the
   Smart-destination feature by matching selected text against connected servers' tool
   descriptions.
-* **Runtime & Environment:** Node.js/TypeScript — likely the same server process as the **Sync
-  Server** on Fly.io, though this isn't explicitly confirmed yet; see `docs/REQUIREMENTS.md`'s Open
-  Flags/Risks. Connects out to MCP servers over remote HTTP only — no stdio, no reaching down to
-  the user's own machine (deferred; see `docs/IDEAS.md`).
+* **Runtime & Environment:** Node.js/TypeScript, colocated in the same server process as the
+  **Sync Server** on Fly.io — no reason to split them once MCP connections are remote-HTTP-only.
+  Connects out to MCP servers over remote HTTP only — no stdio, no reaching down to the user's own
+  machine (deferred; see `docs/IDEAS.md`).
 * **Actor Interactions:** invoked by the desktop's user via the **Dispatch Desk** client (right-click
   → destination, sidebar send, or Smart request).
 * **Component Interactions:** connects to every registered **MCP Server**; calls an LLM for

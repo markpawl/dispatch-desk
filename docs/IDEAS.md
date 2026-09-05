@@ -17,7 +17,7 @@ landed.
 
 _Ordered easiest to hardest to implement._
 
-1. Local-machine MCP server for local filesystem destinations: reach down to the user's own
+1. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
    machine via its own tunneled MCP server (mirroring `fairstream-artist-server`'s
    Cloudflare-tunnel pattern), so destinations like "a new file in a project folder" could target
    a real local directory instead of cloud storage. Deferred for now — real added complexity for
@@ -34,7 +34,5 @@ _Ordered easiest to hardest to implement._
 2. Real-time sync - implementation approach: Use a CRDT (e.g. Yjs) as the desktop's document model
    so concurrent edits from multiple open browsers merge automatically, over a WebSocket transport
    that broadcasts small updates to every connected client. _(Decided — see docs/REQUIREMENTS.md's
-   Real-Time Sync Architecture section. Still open there as flags: which sync/relay hosting option
-   (self-hosted Node relay + datastore vs. a managed realtime backend like PartyKit/Liveblocks) and
-   where it runs, since it needs long-lived connections a plain Vercel serverless function can't
-   hold.)_
+   Real-Time Sync Architecture and Hosting & Server Stack sections: Node.js/TypeScript, Redis, a
+   single Fly.io app.)_

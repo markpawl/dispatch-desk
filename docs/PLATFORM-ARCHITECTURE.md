@@ -12,7 +12,7 @@ an SVG next to it; regenerate with [`diagrams/render.sh`](diagrams/render.sh) (n
 | Dispatch Desk (client) | React web app | Any standards-compliant browser; served as static assets from the Fly.io app | The desktop/editor UI; holds a local CRDT replica; select-and-dispatch flow to destinations |
 | Sync Server | Relay service (Node.js/TypeScript, `y-websocket`) | Fly.io (single app, alongside the client) | Broadcasts CRDT updates between every open client over WebSocket; persists desktop content |
 | Datastore | Redis (e.g. Upstash) | Managed Redis | Durable storage for the desktop's content |
-| MCP Host | Dispatch Desk's own MCP-client role (Node.js/TypeScript) | Likely the same Fly.io server process as the Sync Server (not yet explicitly confirmed) | Knows every connected destination; routes dispatched text to the right MCP tool; powers Smart-destination AI matching |
+| MCP Host | Dispatch Desk's own MCP-client role (Node.js/TypeScript) | Colocated in the same Fly.io server process as the Sync Server | Knows every connected destination; routes dispatched text to the right MCP tool; powers Smart-destination AI matching |
 | MCP Server (per destination) | External/attached service | Remote HTTP only (e.g. Google Drive, Dropbox) — no local stdio for now | Exposes one or more tools, each a selectable destination (email, file write, data-store insert, etc.) |
 
 ## Connection notes
