@@ -1,0 +1,2 @@
+(No directory structure yet — regenerate this as a snapshot of the repo's directory tree once
+there's real structure to show.)
