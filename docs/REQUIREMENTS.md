@@ -40,17 +40,19 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Editor
 
-- The desktop is a full rich-text editor (Tiptap, built on ProseMirror) rather than a plain-text
+- The desktop is a full rich-text editor (Tiptap v3, built on ProseMirror) rather than a plain-text
   `<textarea>` -- supports inline formatting (bold, italic, underline, strikethrough, text color,
-  links) and basic block formatting (headings, bullet/numbered lists), with the same live-sync
-  behavior the plain-text editor already had.
+  links) and basic block formatting (headings H1-H3, bullet/numbered lists), with the same live-sync
+  behavior the plain-text editor already had. A toolbar (`client/src/components/EditorToolbar.tsx`)
+  exposes all of the above; standard keyboard shortcuts (Ctrl-B for bold, Ctrl-U for underline, etc.)
+  come from Tiptap/ProseMirror directly, not custom key handling.
 - Formatting lives in the shared CRDT doc itself, not just in the DOM: Yjs integration goes through
-  Tiptap's own Collaboration extension (`@tiptap/extension-collaboration`, wrapping
-  `y-prosemirror`), binding the editor to a `Y.XmlFragment` instead of the plain `Y.Text` used
-  before -- so formatted text merges across concurrent edits and persists to Redis the same way
-  plain text did.
-- Standard editor keyboard shortcuts (Ctrl-B for bold, etc.) come from Tiptap/ProseMirror directly,
-  not custom key handling.
+  Tiptap's own Collaboration extension (`@tiptap/extension-collaboration`), binding the editor to a
+  `Y.XmlFragment` instead of the plain `Y.Text` used before -- so formatted text merges across
+  concurrent edits and persists to Redis the same way plain text did.
+- Extensions: `StarterKit` (bold/italic/strike/underline/link/headings/lists come bundled in it under
+  Tiptap v3) plus `@tiptap/extension-text-style` + `@tiptap/extension-color` for text color, which
+  aren't part of StarterKit.
 
 ## Destination Architecture
 

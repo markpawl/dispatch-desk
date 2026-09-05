@@ -37,6 +37,60 @@
   color: #c0392b;
 }
 
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.editor-toolbar button {
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.35rem;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.editor-toolbar button:hover {
+  border-color: #ccc;
+}
+
+.editor-toolbar button.active {
+  background: #e6f0ff;
+  border-color: #1f6feb;
+}
+
+.editor-toolbar .toolbar-divider {
+  width: 1px;
+  align-self: stretch;
+  background: #ddd;
+  margin: 0 0.15rem;
+}
+
+.editor-toolbar .color-swatch {
+  min-width: 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #ccc;
+}
+
+.editor-toolbar .color-swatch.active {
+  outline: 2px solid #1f6feb;
+  outline-offset: 1px;
+}
+
 .desktop-editor {
   flex: 1;
   display: flex;
@@ -60,4 +114,8 @@
 
 .desktop-editor .ProseMirror:focus {
   outline: none;
+}
+
+.desktop-editor .ProseMirror a {
+  color: #1f6feb;
 }
