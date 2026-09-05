@@ -38,6 +38,20 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   registered, the system re-checks Purgatory's contents and moves over anything that now
   qualifies.
 
+## Editor
+
+- The desktop is a full rich-text editor (Tiptap, built on ProseMirror) rather than a plain-text
+  `<textarea>` -- supports inline formatting (bold, italic, underline, strikethrough, text color,
+  links) and basic block formatting (headings, bullet/numbered lists), with the same live-sync
+  behavior the plain-text editor already had.
+- Formatting lives in the shared CRDT doc itself, not just in the DOM: Yjs integration goes through
+  Tiptap's own Collaboration extension (`@tiptap/extension-collaboration`, wrapping
+  `y-prosemirror`), binding the editor to a `Y.XmlFragment` instead of the plain `Y.Text` used
+  before -- so formatted text merges across concurrent edits and persists to Redis the same way
+  plain text did.
+- Standard editor keyboard shortcuts (Ctrl-B for bold, etc.) come from Tiptap/ProseMirror directly,
+  not custom key handling.
+
 ## Destination Architecture
 
 - Destinations are modeled as MCP (Model Context Protocol) tools: Dispatch Desk acts as an MCP
