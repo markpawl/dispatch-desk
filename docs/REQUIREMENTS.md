@@ -92,6 +92,12 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   and its persistence adapters are Node-first) and the MCP TypeScript SDK. It hosts both the Sync
   Server and the MCP Host in the same process — no reason to split them once MCP connections are
   remote-HTTP-only, so one Fly.io app covers all of it.
+- **Build version marker**: what's actually deployed is identifiable via a build timestamp (Unix
+  seconds), shown in the desktop UI header and in the server's `/healthz` response. The `Dockerfile`
+  stamps it (`date +%s > BUILD_TIMESTAMP`) during the image build rather than deriving it from git —
+  no need to smuggle `.git` into the Docker build context or thread a build-arg through `fly deploy`,
+  and it's still a fresh, non-hand-maintained value on every image. Absent in local dev (no Docker
+  build step); both the client and server fall back visibly (`"dev"` / `null`) rather than guessing.
 - The datastore is Redis (e.g. via Upstash) — holds the CRDT snapshot, the send log, the
   destination registry, and Purgatory's contents. Chosen over MongoDB because everything Dispatch
   Desk stores is simple key → value/blob access, not data that needs flexible cross-record

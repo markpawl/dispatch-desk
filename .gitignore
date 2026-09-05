@@ -6,3 +6,6 @@ dist/
 !.env.example
 .DS_Store
 *.log
+# Written by the Dockerfile's build stage (see BUILD_TIMESTAMP/version.ts);
+# only ever generated inside the image, never meant to be committed.
+BUILD_TIMESTAMP

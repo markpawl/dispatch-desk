@@ -16,7 +16,14 @@ RUN npm install
 
 COPY client client
 COPY server server
-RUN npm run build
+
+# A build-time version marker (Unix seconds) rather than a git-derived value
+# -- no need to smuggle .git into the build context or thread a build-arg
+# through `fly deploy`, and it's still a fresh, non-hand-maintained number
+# on every image. VITE_-prefixed env vars are picked up by Vite's build
+# automatically; the server reads the same file directly (see version.ts).
+RUN date +%s > BUILD_TIMESTAMP
+RUN VITE_BUILD_TIMESTAMP=$(cat BUILD_TIMESTAMP) npm run build
 
 FROM node:22-slim
 WORKDIR /app

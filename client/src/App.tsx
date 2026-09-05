@@ -10,6 +10,12 @@ import { createDesktopDoc } from './lib/desktopDoc'
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
+// Set by the Dockerfile's build stage; unset in local dev (see vite-env.d.ts
+// and server/src/version.ts).
+const buildTimestamp = import.meta.env.VITE_BUILD_TIMESTAMP
+  ? new Date(Number(import.meta.env.VITE_BUILD_TIMESTAMP) * 1000)
+  : null
+
 function App() {
   const [{ fragment, provider }] = useState(() => createDesktopDoc())
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
@@ -42,7 +48,12 @@ function App() {
     <div className="desktop">
       <header className="desktop-header">
         <h1>Dispatch Desk</h1>
-        <span className={`status status-${status}`}>{status}</span>
+        <div className="desktop-header-status">
+          <span className="version" title="When this deployment was built">
+            {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
+          </span>
+          <span className={`status status-${status}`}>{status}</span>
+        </div>
       </header>
       <EditorToolbar editor={editor} />
       <EditorContent className="desktop-editor" editor={editor} />
