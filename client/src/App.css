@@ -1,0 +1,53 @@
+.desktop {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.desktop-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.desktop-header h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.status {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-connected {
+  color: #2a8a4a;
+}
+
+.status-connecting {
+  color: #b8860b;
+}
+
+.status-disconnected {
+  color: #c0392b;
+}
+
+.desktop-editor {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  font: inherit;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  padding: 0.75rem;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}

@@ -1,0 +1,26 @@
+# Fly.io app config -- single app hosting both the client and the Sync
+# Server (see docs/REQUIREMENTS.md's Hosting & Server Stack section).
+#
+# `app` names are globally unique on Fly -- change this if "dispatch-desk" is
+# already taken when you run `fly launch` / `fly apps create`.
+app = "dispatch-desk"
+primary_region = "iad"
+
+[build]
+
+[env]
+PORT = "8080"
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = false
+auto_start_machines = true
+# Kept at 1 (not scaled to zero) because the Sync Server holds the desktop's
+# live CRDT state in memory between debounced Redis persists -- see
+# docs/REQUIREMENTS.md's Real-Time Sync Architecture / Hosting sections.
+min_machines_running = 1
+processes = ["app"]
+
+[[vm]]
+size = "shared-cpu-1x"
