@@ -3,7 +3,7 @@ import Collaboration from '@tiptap/extension-collaboration'
 import { Color } from '@tiptap/extension-color'
 import { TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { EditorToolbar } from './components/EditorToolbar'
 import { createDesktopDoc } from './lib/desktopDoc'
@@ -20,8 +20,19 @@ function App() {
   const [{ fragment, provider }] = useState(() => createDesktopDoc())
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
 
-  const editor = useEditor({
-    extensions: [
+  // Memoized (and pinned to `fragment` via useEditor's deps below) so this
+  // array -- and the extension instances in it -- keeps the same identity
+  // across re-renders. Without that, useEditor's default (no deps) path
+  // re-diffs `extensions` by reference on every render of App and, seeing a
+  // "different" array each time (StarterKit.configure/Collaboration.configure
+  // return fresh objects), calls editor.setOptions() to reconcile -- which
+  // reinitializes the Yjs Collaboration binding. Harmless-looking locally
+  // (status barely changes over a stable loopback connection), but on a real
+  // network the WebSocket status flickers far more often, each flicker
+  // re-renders App, and each of those resets mid-keystroke -- the typed
+  // character disappears as fast as it was typed.
+  const extensions = useMemo(
+    () => [
       // Undo/redo comes from Collaboration's own Yjs-aware history instead,
       // so the two don't fight over the same keyboard shortcuts/state.
       // Underline and Link are already bundled in StarterKit (Tiptap v3) --
@@ -32,8 +43,10 @@ function App() {
       TextStyle,
       Color,
     ],
-    autofocus: true,
-  })
+    [fragment],
+  )
+
+  const editor = useEditor({ extensions, autofocus: true }, [fragment])
 
   useEffect(() => {
     const onStatus = ({ status }: { status: ConnectionStatus }) => setStatus(status)
