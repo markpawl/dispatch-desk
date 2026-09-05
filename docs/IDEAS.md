@@ -17,7 +17,19 @@ landed.
 
 _Ordered easiest to hardest to implement._
 
-1. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
+1. [destinations] Harden what's live first: before adding destination features, add tests/health
+   checks around the Sync Server + Redis persistence, confirm Fly secrets are set, and consider a
+   `/health` endpoint. Lower risk, but no new user-facing capability.
+2. [destinations] UI-first build order: build the right-click menu and destination sidebar
+   (`docs/REQUIREMENTS.md`'s Key User Flows) against a stubbed/fake destination list, then swap in
+   the real MCP Host once the UI is settled. Faster to see/demo, but risks rework if the MCP
+   integration surfaces something the UI didn't anticipate.
+3. [destinations] Smallest end-to-end vertical slice (recommended): build the MCP Host in the
+   server process plus exactly one real destination, and wire the minimal send flow — select text
+   → send to that destination → log entry + delete from desktop — fully end-to-end before building
+   the sidebar, Smart routing, or Purgatory. De-risks the whole Destination Architecture
+   (`docs/REQUIREMENTS.md`) before investing in UI polish.
+4. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
    machine via its own tunneled MCP server (mirroring `fairstream-artist-server`'s
    Cloudflare-tunnel pattern), so destinations like "a new file in a project folder" could target
    a real local directory instead of cloud storage. Deferred for now — real added complexity for
