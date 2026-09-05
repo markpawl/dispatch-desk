@@ -8,6 +8,11 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - Dispatch Desk is a text editor that behaves like a desktop: type freely, with no destination
   decided up front, then later dispatch selected text out to one of several configured
   destinations — rather than filing text away as you write.
+- The idea: one single place to capture notes, ideas, thoughts, and reminders as they occur, with
+  that information later migrating out to wherever it actually belongs. The desktop is a staging
+  area, not a permanent home for any of it.
+- Scope: a single shared desktop — one document, the same one no matter how many browsers have it
+  open. No multiple/named desktops for now.
 
 ## Key User Flows
 
@@ -91,8 +96,6 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Open Flags / Risks
 
-- Whether destinations (and the desktop itself) are per-user/account-scoped, or global/shared
-  across every browser instance, is not yet decided.
 - Destination granularity isn't decided: whether one destination is a whole MCP server, or one
   tool within a server (finer-grained).
 - Whether the app connects to MCP servers locally (stdio transport) or over remote HTTP isn't
