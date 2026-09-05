@@ -39,15 +39,25 @@
 
 .desktop-editor {
   flex: 1;
+  display: flex;
+  min-height: 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+/* The actual contenteditable div Tiptap renders inside .desktop-editor. */
+.desktop-editor .ProseMirror {
+  flex: 1;
   width: 100%;
-  resize: none;
-  font: inherit;
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   font-size: 0.95rem;
   line-height: 1.5;
   padding: 0.75rem;
   box-sizing: border-box;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  overflow-y: auto;
+}
+
+.desktop-editor .ProseMirror:focus {
+  outline: none;
 }
