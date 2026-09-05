@@ -19,10 +19,23 @@ A third feature, **Purgatory**, holds text that doesn't currently match any regi
 When a new destination is registered, the system re-checks Purgatory's contents and moves over
 anything that now qualifies.
 
-**Not yet decided: how destinations connect under the hood.** One idea being explored — modeling
-each destination as an MCP (Model Context Protocol) tool, with Dispatch Desk itself acting as an
-MCP host — is recorded in `IDEAS.md` rather than here, since it's a proposed direction, not a
-settled design.
+**Destinations are modeled as MCP (Model Context Protocol) tools.** Dispatch Desk acts as an MCP
+host: each connected MCP server can expose one or more tools, and each such tool is a selectable
+destination (e.g. an email-sending tool, a project-directory write/append tool, a data-store insert
+tool). Sending text to a destination is calling that tool with the selected text. This means:
+- Destination integrations — including their auth — come largely for free by connecting to
+  existing MCP servers, rather than building bespoke connectors per destination type.
+- The Smart-destination feature is standard MCP tool-selection: hand an LLM the selected text plus
+  the connected servers' tool descriptions (from `list_tools`) and have it pick one — the same
+  mechanism that powers tool use generally, pointed at destinations instead of arbitrary tools.
+- The destination sidebar is a live view over `list_tools`/`list_resources` across connected
+  servers.
+- Purgatory's re-check trigger lines up with MCP's own connect/disconnect lifecycle: re-run
+  matching against the current tool descriptions whenever a server connects or its tool list
+  changes.
+
+See `docs/REQUIREMENTS.md`'s Destination Architecture section for the decision, and its Open
+Flags/Risks for what's still unresolved (destination granularity, local vs. remote transport).
 
 This is still an early concept — see `IDEAS.md` for open ideas/questions and
 `PLATFORM-COMPONENTS.md` / `PLATFORM-ARCHITECTURE.md` for design once components and structure are

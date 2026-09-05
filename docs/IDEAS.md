@@ -28,18 +28,10 @@ _Ordered easiest to hardest to implement._
    host the sync server somewhere always-on (Fly.io, Render, a VPS) or push it to a managed service
    and keep the static frontend on Vercel. "Delete on send" would just be removing that range from
    the shared CRDT doc, propagating the deletion to every open browser the same way any edit would.
-2. Destinations - MCP integration: Model each destination as an MCP (Model Context Protocol) tool
-   exposed by a connected MCP server, with Dispatch Desk acting as an MCP host. Sending text to a
-   destination = calling that tool with the selected text. This would let destination integrations
-   (including auth) come largely for free from existing MCP servers instead of bespoke connectors
-   per destination type, and would give the Smart-destination feature a natural source of metadata
-   (each tool's own name/description, matched against selected text the same way an LLM picks among
-   tool schemas generally). The destination sidebar would become a live view over connected
-   servers' `list_tools`/`list_resources`, and Purgatory's re-check trigger would line up with
-   MCP's connect/disconnect lifecycle (re-run matching whenever a server connects or its tool list
-   changes). Open questions: is a destination one whole MCP server or one tool within a server
-   (finer-grained); does the app run locally (stdio transport) or hit remote MCP servers over HTTP.
-
 #### Addressed
 
-_(none yet)_
+1. Destinations - MCP integration: Model each destination as an MCP (Model Context Protocol) tool
+   exposed by a connected MCP server, with Dispatch Desk acting as an MCP host. _(Decided — see
+   docs/REQUIREMENTS.md's Destination Architecture section. Still open there as flags: destination
+   granularity (one MCP server vs. one tool within a server) and transport (local stdio vs. remote
+   HTTP).)_

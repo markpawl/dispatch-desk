@@ -32,6 +32,22 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   registered, the system re-checks Purgatory's contents and moves over anything that now
   qualifies.
 
+## Destination Architecture
+
+- Destinations are modeled as MCP (Model Context Protocol) tools: Dispatch Desk acts as an MCP
+  host, and each connected MCP server can expose one or more tools that become selectable
+  destinations (e.g. an email-sending tool, a project-directory write/append tool, a data-store
+  insert tool).
+- Sending text to a destination is calling that tool with the selected text.
+- The Smart-destination feature works by handing an LLM the selected text plus the connected
+  servers' tool descriptions (via `list_tools`) and having it choose one — the same mechanism that
+  powers tool use generally, pointed at destinations instead of arbitrary tools.
+- The destination sidebar is a live view over `list_tools`/`list_resources` across connected
+  servers.
+- Purgatory's re-check trigger lines up with MCP's own connect/disconnect lifecycle: re-run
+  matching against the current tool descriptions whenever a server connects or its tool list
+  changes.
+
 ## Access & Collaboration
 
 - The app must be reachable and usable from any standards-compliant web browser — no native app,
@@ -46,5 +62,8 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - No auth/identity model decided yet.
 - Whether destinations (and the desktop itself) are per-user/account-scoped, or global/shared
   across every browser instance, is not yet decided.
-- How destinations are actually implemented/connected under the hood, and how the live-sync
-  requirement above gets built, are still open — see `IDEAS.md`.
+- Destination granularity isn't decided: whether one destination is a whole MCP server, or one
+  tool within a server (finer-grained).
+- Whether the app connects to MCP servers locally (stdio transport) or over remote HTTP isn't
+  decided.
+- How the live-sync requirement above gets built is still open — see `IDEAS.md`.
