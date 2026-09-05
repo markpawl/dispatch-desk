@@ -17,17 +17,8 @@ landed.
 
 _Ordered easiest to hardest to implement._
 
-1. Real-time sync - implementation approach: Use a CRDT (e.g. Yjs) as the desktop's document model
-   so concurrent edits from multiple open browsers merge automatically, over a WebSocket transport
-   that broadcasts small updates to every connected client. Sync/relay server options: self-host a
-   small Node relay (e.g. based on y-websocket) with a persistence hook into a real datastore
-   (Postgres/SQLite/Redis) so content survives restarts; or use a managed realtime backend built
-   for this (PartyKit, Liveblocks) to avoid running the persistent-connection infrastructure
-   yourself. Hosting note: this needs a process that can hold long-lived connections, which doesn't
-   fit a plain Vercel serverless function (same limitation already flagged for fed-server) — either
-   host the sync server somewhere always-on (Fly.io, Render, a VPS) or push it to a managed service
-   and keep the static frontend on Vercel. "Delete on send" would just be removing that range from
-   the shared CRDT doc, propagating the deletion to every open browser the same way any edit would.
+_(none yet)_
+
 #### Addressed
 
 1. Destinations - MCP integration: Model each destination as an MCP (Model Context Protocol) tool
@@ -35,3 +26,10 @@ _Ordered easiest to hardest to implement._
    docs/REQUIREMENTS.md's Destination Architecture section. Still open there as flags: destination
    granularity (one MCP server vs. one tool within a server) and transport (local stdio vs. remote
    HTTP).)_
+2. Real-time sync - implementation approach: Use a CRDT (e.g. Yjs) as the desktop's document model
+   so concurrent edits from multiple open browsers merge automatically, over a WebSocket transport
+   that broadcasts small updates to every connected client. _(Decided — see docs/REQUIREMENTS.md's
+   Real-Time Sync Architecture section. Still open there as flags: which sync/relay hosting option
+   (self-hosted Node relay + datastore vs. a managed realtime backend like PartyKit/Liveblocks) and
+   where it runs, since it needs long-lived connections a plain Vercel serverless function can't
+   hold.)_

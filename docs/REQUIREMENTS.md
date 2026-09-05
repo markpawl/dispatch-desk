@@ -57,6 +57,17 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - An edit made in one open instance must propagate live to every other open instance — the way a
   collaborative editor (e.g. Google Docs) behaves — not only on next load/refresh.
 
+## Real-Time Sync Architecture
+
+- The desktop's document model is a CRDT (e.g. Yjs), so concurrent edits from multiple open
+  browsers merge automatically without server-side lock-stepping.
+- Changes propagate over a WebSocket transport: a sync/relay server broadcasts each small update to
+  every other connected client.
+- "Delete on send" is implemented as removing that range from the shared CRDT doc — the deletion
+  then propagates to every open browser the same way any other edit would.
+- The sync server must persist the desktop's content to a real datastore so it survives restarts
+  and a browser opening later sees current content, not just what's in memory.
+
 ## Open Flags / Risks
 
 - No auth/identity model decided yet.
@@ -66,4 +77,9 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   tool within a server (finer-grained).
 - Whether the app connects to MCP servers locally (stdio transport) or over remote HTTP isn't
   decided.
-- How the live-sync requirement above gets built is still open — see `IDEAS.md`.
+- Sync/relay hosting isn't decided: self-host a small Node relay (e.g. based on y-websocket) with
+  a persistence hook into a datastore (Postgres/SQLite/Redis), or use a managed realtime backend
+  built for this (PartyKit, Liveblocks). Either way, this needs a process that can hold long-lived
+  connections, which doesn't fit a plain Vercel serverless function (same limitation already
+  flagged for fed-server) — the sync server needs somewhere always-on (Fly.io, Render, a VPS) or a
+  managed service, while the static frontend can stay on Vercel.
