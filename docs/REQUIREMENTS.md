@@ -64,6 +64,11 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   Desk stores is simple key → value/blob access, not data that needs flexible cross-record
   querying.
 
+## Auth / Identity
+
+- No authentication or identity system, for now — Dispatch Desk is for personal use only: a single
+  user, no accounts, no login.
+
 ## Access & Collaboration
 
 - The app must be reachable and usable from any standards-compliant web browser — no native app,
@@ -86,7 +91,6 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Open Flags / Risks
 
-- No auth/identity model decided yet.
 - Whether destinations (and the desktop itself) are per-user/account-scoped, or global/shared
   across every browser instance, is not yet decided.
 - Destination granularity isn't decided: whether one destination is a whole MCP server, or one
