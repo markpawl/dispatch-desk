@@ -37,8 +37,6 @@ _Ordered easiest to hardest to implement._
    (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
    section for the current decision.
 
-2. Client - Header - version number: A sequential version number that increments each time the app is deployed should appear to the right of the app title in the client. The font size should be smaller than that of the app title and the font color should be a medium grey,
-
 #### Addressed
 
 1. Destinations - MCP integration: Model each destination as an MCP (Model Context Protocol) tool
@@ -50,9 +48,11 @@ _Ordered easiest to hardest to implement._
    that broadcasts small updates to every connected client. _(Decided — see docs/REQUIREMENTS.md's
    Real-Time Sync Architecture and Hosting & Server Stack sections: Node.js/TypeScript, Redis, a
    single Fly.io app.)_
-3. [ops] App version number: show what's actually deployed, visible both in the desktop UI header
-   and via the server's `/healthz` endpoint. _(Landed as a build timestamp rather than a git commit
-   identifier — see docs/REQUIREMENTS.md's Hosting & Server Stack section. `Dockerfile` stamps
-   `BUILD_TIMESTAMP` (Unix seconds) during the image build; `client/src/vite-env.d.ts` +
-   `App.tsx` and `server/src/version.ts` + `index.ts`'s `/healthz` read it, falling back to
-   `"dev"`/`null` in local dev.)_
+3. Client - Header - version number: originally proposed as a sequential version number
+   incrementing each deploy, next to the app title, smaller font and medium grey. _(Landed as a
+   build timestamp instead of a literal sequential counter, per follow-up discussion — see
+   docs/REQUIREMENTS.md's Hosting & Server Stack section. Also exposed via the server's `/healthz`
+   endpoint. `Dockerfile` stamps `BUILD_TIMESTAMP` (Unix seconds) during the image build;
+   `client/src/vite-env.d.ts` + `App.tsx` (`.version` -- 0.75rem, `#888`, matching the smaller/grey
+   ask) and `server/src/version.ts` + `index.ts`'s `/healthz` read it, falling back to `"dev"`/`null`
+   in local dev.)_
