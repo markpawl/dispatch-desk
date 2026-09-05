@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -14,6 +14,8 @@ describe('serveStatic', () => {
     dir = await mkdtemp(join(tmpdir(), 'dispatch-desk-static-'))
     await writeFile(join(dir, 'index.html'), '<h1>desktop</h1>')
     await writeFile(join(dir, 'app.js'), 'console.log("hi")')
+    await mkdir(join(dir, 'assets'), { recursive: true })
+    await writeFile(join(dir, 'assets', 'index-abc123.js'), 'console.log("hashed")')
 
     server = createServer(serveStatic(dir))
     await new Promise<void>((resolveReady) => server.listen(0, resolveReady))
@@ -38,6 +40,16 @@ describe('serveStatic', () => {
     const response = await fetch(`${baseUrl}/some/client/route`)
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('<h1>desktop</h1>')
+  })
+
+  it('tells browsers never to cache index.html (so a redeploy is seen on refresh)', async () => {
+    const response = await fetch(`${baseUrl}/index.html`)
+    expect(response.headers.get('cache-control')).toBe('no-cache')
+  })
+
+  it('tells browsers to cache hashed assets forever (filename changes if content does)', async () => {
+    const response = await fetch(`${baseUrl}/assets/index-abc123.js`)
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
   })
 
   it('does not escape rootDir via ..', async () => {
