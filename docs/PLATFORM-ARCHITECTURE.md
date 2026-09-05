@@ -13,7 +13,7 @@ an SVG next to it; regenerate with [`diagrams/render.sh`](diagrams/render.sh) (n
 | Sync Server | Relay service (Node.js/TypeScript, `y-websocket`) | Fly.io (single app, alongside the client) | Broadcasts CRDT updates between every open client over WebSocket; persists desktop content |
 | Datastore | Redis (e.g. Upstash) | Managed Redis | Durable storage for the desktop's content |
 | MCP Host | Dispatch Desk's own MCP-client role (Node.js/TypeScript) | Likely the same Fly.io server process as the Sync Server (not yet explicitly confirmed) | Knows every connected destination; routes dispatched text to the right MCP tool; powers Smart-destination AI matching |
-| MCP Server (per destination) | External/attached service | Local (stdio) or remote (HTTP) — not yet decided | Exposes one or more tools, each a selectable destination (email, file write, data-store insert, etc.) |
+| MCP Server (per destination) | External/attached service | Remote HTTP only (e.g. Google Drive, Dropbox) — no local stdio for now | Exposes one or more tools, each a selectable destination (email, file write, data-store insert, etc.) |
 
 ## Connection notes
 
@@ -26,6 +26,11 @@ an SVG next to it; regenerate with [`diagrams/render.sh`](diagrams/render.sh) (n
   own code is only the MCP-host role plus the client and sync pieces; every actual destination
   (an email sender, a project-file writer, a data-store) lives in whatever MCP server exposes it,
   on-premises or third-party.
+- **The MCP Host only reaches out over remote HTTP, for now** — no stdio subprocesses, and no
+  tunneling down to the user's own machine. File/folder-shaped destinations therefore go through
+  cloud storage (Google Drive and/or Dropbox) rather than a local directory; reaching a real local
+  machine would need its own tunneled MCP server (the same pattern `fairstream-artist-server`
+  already uses with Cloudflare) and is deferred — see `docs/IDEAS.md`.
 - **The Smart-destination feature is standard MCP tool-selection**: the MCP Host hands an LLM the
   selected text plus every connected server's tool descriptions (from `list_tools`) and has it pick
   one, the same mechanism that powers tool use generally, pointed at destinations instead of

@@ -47,7 +47,8 @@ This file documents the app's components.
   descriptions.
 * **Runtime & Environment:** Node.js/TypeScript — likely the same server process as the **Sync
   Server** on Fly.io, though this isn't explicitly confirmed yet; see `docs/REQUIREMENTS.md`'s Open
-  Flags/Risks (also local stdio vs. remote HTTP transport to MCP servers).
+  Flags/Risks. Connects out to MCP servers over remote HTTP only — no stdio, no reaching down to
+  the user's own machine (deferred; see `docs/IDEAS.md`).
 * **Actor Interactions:** invoked by the desktop's user via the **Dispatch Desk** client (right-click
   → destination, sidebar send, or Smart request).
 * **Component Interactions:** connects to every registered **MCP Server**; calls an LLM for
@@ -56,8 +57,9 @@ This file documents the app's components.
 ### MCP Server (each exposes one or more destinations)
 * **Purpose:** exposes one or more tools; each tool — not the server as a whole — is a selectable
   destination (e.g. send-email, append-to-file, insert-into-data-store).
-* **Runtime & Environment:** varies per server — a local stdio process or a remote HTTP service;
-  existing/off-the-shelf MCP servers can be connected directly rather than built from scratch.
+* **Runtime & Environment:** a remote HTTP service (e.g. Google Drive's, Dropbox's, or another
+  provider's MCP server) — not a local stdio process, for now; existing/off-the-shelf MCP servers
+  can be connected directly rather than built from scratch.
 * **Actor Interactions:** none directly.
 * **Component Interactions:** registered with the **MCP Host**; invoked (tool call) when text is
   dispatched to one of its destinations.

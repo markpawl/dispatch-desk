@@ -17,15 +17,20 @@ landed.
 
 _Ordered easiest to hardest to implement._
 
-_(none yet)_
+1. Local-machine MCP server for local filesystem destinations: reach down to the user's own
+   machine via its own tunneled MCP server (mirroring `fairstream-artist-server`'s
+   Cloudflare-tunnel pattern), so destinations like "a new file in a project folder" could target
+   a real local directory instead of cloud storage. Deferred for now — real added complexity for
+   little gain while everything else is cloud-hosted; revisit once the cloud-storage-only approach
+   (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
+   section for the current decision.
 
 #### Addressed
 
 1. Destinations - MCP integration: Model each destination as an MCP (Model Context Protocol) tool
    exposed by a connected MCP server, with Dispatch Desk acting as an MCP host. _(Decided — see
-   docs/REQUIREMENTS.md's Destination Architecture section. Still open there as flags: destination
-   granularity (one MCP server vs. one tool within a server) and transport (local stdio vs. remote
-   HTTP).)_
+   docs/REQUIREMENTS.md's Destination Architecture section, which also now covers granularity —
+   one destination = one tool, not one server — and transport — remote HTTP only, no local stdio.)_
 2. Real-time sync - implementation approach: Use a CRDT (e.g. Yjs) as the desktop's document model
    so concurrent edits from multiple open browsers merge automatically, over a WebSocket transport
    that broadcasts small updates to every connected client. _(Decided — see docs/REQUIREMENTS.md's

@@ -20,9 +20,10 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - Select text, right-click, choose "destinations," pick one, confirm send.
 - Default post-send action: write a log entry, then delete the sent text from the desktop — the
   desktop stays a transient working surface, not an archive.
-- Destination examples: email to someone; a new file in a project folder; appended to an existing
-  document; a row in a data store; AI-integrated into a larger body of information (merged into
-  whichever of several files in a project directory it best fits).
+- Destination examples: email to someone; a new file in a cloud-storage folder (Google Drive
+  and/or Dropbox — not the local filesystem, for now); appended to an existing document; a row in
+  a data store; AI-integrated into a larger body of information (merged into whichever of several
+  files in a project folder it best fits).
 
 ### Smart destination
 - Right-click → Destination → Smart invokes AI to suggest which registered destination a selection
@@ -55,6 +56,13 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - Purgatory's re-check trigger lines up with MCP's own connect/disconnect lifecycle: re-run
   matching against the current tool descriptions whenever a server connects or its tool list
   changes.
+- **Transport: remote HTTP only, for now.** The MCP Host connects out to MCP servers over the
+  network — no stdio subprocesses, and no reaching down to the user's own local machine. Reaching
+  a local machine would need its own tunneled MCP server (mirroring `fairstream-artist-server`'s
+  Cloudflare-tunnel pattern) — real complexity, deferred for now; see `IDEAS.md`.
+- **File/folder-shaped destinations go through cloud storage, not the local filesystem.** "A new
+  file in a project folder" means a folder in Google Drive and/or Dropbox, reached via their own
+  MCP servers over HTTP — not a directory on the user's machine.
 
 ## Hosting & Server Stack
 
@@ -99,7 +107,5 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Open Flags / Risks
 
-- Whether the app connects to MCP servers locally (stdio transport) or over remote HTTP isn't
-  decided.
 - Whether the MCP Host runs as part of the same Node/TypeScript server process as the Sync Server
   (the natural choice, since it's already on Fly.io) or separately isn't explicitly confirmed yet.
