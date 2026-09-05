@@ -37,6 +37,8 @@ _Ordered easiest to hardest to implement._
    (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
    section for the current decision.
 
+2. Client - Header - version number: A sequential version number that increments each time the app is deployed should appear to the right of the app title in the client. The font size should be smaller than that of the app title and the font color should be a medium grey,
+
 #### Addressed
 
 1. Destinations - MCP integration: Model each destination as an MCP (Model Context Protocol) tool
