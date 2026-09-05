@@ -1,13 +1,18 @@
 import { createServer } from 'node:http'
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { serveStatic } from './staticFiles.js'
 import { handleUpgrade, waitUntilReady } from './syncServer.js'
 
 const PORT = Number(process.env.PORT ?? process.env.SYNC_SERVER_PORT ?? 8787)
 // In the deployed container this is the client build copied alongside the
 // server (see ../Dockerfile); in local dev it's the sibling package's own
-// `vite build` output.
-const CLIENT_DIST_DIR = resolve(process.env.CLIENT_DIST_DIR ?? '../client/dist')
+// `vite build` output. Resolved relative to this file (not process.cwd())
+// so it's correct no matter what directory `node` is launched from.
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const CLIENT_DIST_DIR = process.env.CLIENT_DIST_DIR
+  ? resolve(process.env.CLIENT_DIST_DIR)
+  : resolve(__dirname, '../../client/dist')
 
 const serveClient = serveStatic(CLIENT_DIST_DIR)
 
