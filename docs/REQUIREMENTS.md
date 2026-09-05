@@ -43,6 +43,9 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   host, and each connected MCP server can expose one or more tools that become selectable
   destinations (e.g. an email-sending tool, a project-directory write/append tool, a data-store
   insert tool).
+- **Granularity: one destination = one MCP tool, not one whole server.** A single server can
+  expose several unrelated tools (e.g. one per project directory, or per Gmail/Calendar/Drive);
+  each is its own selectable destination, never bundled under one server-level entry.
 - Sending text to a destination is calling that tool with the selected text.
 - The Smart-destination feature works by handing an LLM the selected text plus the connected
   servers' tool descriptions (via `list_tools`) and having it choose one — the same mechanism that
@@ -96,8 +99,6 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Open Flags / Risks
 
-- Destination granularity isn't decided: whether one destination is a whole MCP server, or one
-  tool within a server (finer-grained).
 - Whether the app connects to MCP servers locally (stdio transport) or over remote HTTP isn't
   decided.
 - Whether the MCP Host runs as part of the same Node/TypeScript server process as the Sync Server

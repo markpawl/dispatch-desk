@@ -53,9 +53,9 @@ This file documents the app's components.
 * **Component Interactions:** connects to every registered **MCP Server**; calls an LLM for
   Smart-destination matching.
 
-### MCP Server (one per destination, or one per group of destinations)
-* **Purpose:** exposes one or more tools, each a selectable destination (e.g. send-email,
-  append-to-file, insert-into-data-store).
+### MCP Server (each exposes one or more destinations)
+* **Purpose:** exposes one or more tools; each tool — not the server as a whole — is a selectable
+  destination (e.g. send-email, append-to-file, insert-into-data-store).
 * **Runtime & Environment:** varies per server — a local stdio process or a remote HTTP service;
   existing/off-the-shelf MCP servers can be connected directly rather than built from scratch.
 * **Actor Interactions:** none directly.
