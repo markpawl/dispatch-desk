@@ -50,6 +50,10 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Hosting & Server Stack
 
+- The client is React + Vite (+ TypeScript), matching `fairstream-client` and
+  `fairstream-artist-dashboard`'s existing stack. Considered Vue as an alternative: neither Yjs nor
+  MCP favors one framework over the other (Yjs is framework-agnostic; MCP is backend-only), so
+  there was no technical reason to break from the toolchain already established elsewhere.
 - A single Fly.io app hosts both the built React client and the Sync Server — one deploy, one
   origin, no separate frontend host.
 - The server app (the Sync Server, and the natural home for the MCP Host — see Open Flags/Risks)
