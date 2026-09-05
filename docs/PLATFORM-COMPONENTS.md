@@ -22,9 +22,8 @@ This file documents the app's components.
 ### Sync Server
 * **Purpose:** relay CRDT updates between every open Dispatch Desk client instance, so all of them
   reflect the same live desktop.
-* **Runtime & Environment:** a process holding long-lived WebSocket connections — needs an
-  always-on host, not a plain serverless function. Whether this is self-hosted (e.g. a small Node
-  relay) or a managed realtime backend (PartyKit, Liveblocks) isn't decided yet.
+* **Runtime & Environment:** Node.js/TypeScript, built on `y-websocket`; deployed as a single
+  Fly.io app alongside the built React client (one deploy, one origin, no separate frontend host).
 * **Actor Interactions:** none directly — a backend piece.
 * **Component Interactions:** every open **Dispatch Desk** client connects here over WebSocket;
   writes content snapshots to the **Datastore**.
@@ -32,8 +31,8 @@ This file documents the app's components.
 ### Datastore
 * **Purpose:** durable storage for the desktop's content, so it survives Sync Server restarts and
   a client opening later sees current content rather than an empty one.
-* **Runtime & Environment:** a real datastore — which one (Postgres/SQLite/Redis) isn't decided
-  yet.
+* **Runtime & Environment:** Redis (e.g. via Upstash) — holds the CRDT snapshot, send log,
+  destination registry, and Purgatory's contents as simple key → value/blob data.
 * **Actor Interactions:** none directly.
 * **Component Interactions:** written to by the **Sync Server**.
 
@@ -46,8 +45,9 @@ This file documents the app's components.
   destination, dispatches selected text to whichever one is chosen, and powers the
   Smart-destination feature by matching selected text against connected servers' tool
   descriptions.
-* **Runtime & Environment:** not yet decided whether this runs in-browser or as a separate backend
-  service — see `docs/REQUIREMENTS.md`'s Open Flags/Risks (local stdio vs. remote HTTP transport).
+* **Runtime & Environment:** Node.js/TypeScript — likely the same server process as the **Sync
+  Server** on Fly.io, though this isn't explicitly confirmed yet; see `docs/REQUIREMENTS.md`'s Open
+  Flags/Risks (also local stdio vs. remote HTTP transport to MCP servers).
 * **Actor Interactions:** invoked by the desktop's user via the **Dispatch Desk** client (right-click
   → destination, sidebar send, or Smart request).
 * **Component Interactions:** connects to every registered **MCP Server**; calls an LLM for

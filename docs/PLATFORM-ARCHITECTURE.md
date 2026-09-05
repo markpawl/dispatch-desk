@@ -9,10 +9,10 @@ an SVG next to it; regenerate with [`diagrams/render.sh`](diagrams/render.sh) (n
 
 | Component | Kind | Where it runs | Role |
 |-----------|------|---------------|------|
-| Dispatch Desk (client) | React web app | Any standards-compliant browser | The desktop/editor UI; holds a local CRDT replica; select-and-dispatch flow to destinations |
-| Sync Server | Relay service | An always-on host — self-hosted or a managed realtime backend (not yet decided which) | Broadcasts CRDT updates between every open client over WebSocket; persists desktop content |
-| Datastore | Storage | Not yet decided (Postgres/SQLite/Redis) | Durable storage for the desktop's content |
-| MCP Host | Dispatch Desk's own MCP-client role | Not yet decided — in-client or a separate backend service | Knows every connected destination; routes dispatched text to the right MCP tool; powers Smart-destination AI matching |
+| Dispatch Desk (client) | React web app | Any standards-compliant browser; served as static assets from the Fly.io app | The desktop/editor UI; holds a local CRDT replica; select-and-dispatch flow to destinations |
+| Sync Server | Relay service (Node.js/TypeScript, `y-websocket`) | Fly.io (single app, alongside the client) | Broadcasts CRDT updates between every open client over WebSocket; persists desktop content |
+| Datastore | Redis (e.g. Upstash) | Managed Redis | Durable storage for the desktop's content |
+| MCP Host | Dispatch Desk's own MCP-client role (Node.js/TypeScript) | Likely the same Fly.io server process as the Sync Server (not yet explicitly confirmed) | Knows every connected destination; routes dispatched text to the right MCP tool; powers Smart-destination AI matching |
 | MCP Server (per destination) | External/attached service | Local (stdio) or remote (HTTP) — not yet decided | Exposes one or more tools, each a selectable destination (email, file write, data-store insert, etc.) |
 
 ## Connection notes
@@ -38,6 +38,5 @@ an SVG next to it; regenerate with [`diagrams/render.sh`](diagrams/render.sh) (n
   Dispatch Desk client holds a live WebSocket connection to the Sync Server for real-time content
   sync, independent of whatever connection the MCP Host maintains to MCP servers.
 - **The Sync Server needs long-lived connections**, which rules out a plain serverless function
-  (the same constraint already noted for `fairstream-federation-server` on Vercel) — it needs
-  either an always-on host or a managed realtime backend, while the client itself can still be a
-  static deploy.
+  (the same constraint already noted for `fairstream-federation-server` on Vercel) — this is why
+  it's hosted on Fly.io rather than Vercel, in a single app alongside the client's static build.

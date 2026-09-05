@@ -48,6 +48,18 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   matching against the current tool descriptions whenever a server connects or its tool list
   changes.
 
+## Hosting & Server Stack
+
+- A single Fly.io app hosts both the built React client and the Sync Server — one deploy, one
+  origin, no separate frontend host.
+- The server app (the Sync Server, and the natural home for the MCP Host — see Open Flags/Risks)
+  is written in Node.js/TypeScript, matching Yjs's native ecosystem (`y-websocket` and its
+  persistence adapters are Node-first) and the MCP TypeScript SDK.
+- The datastore is Redis (e.g. via Upstash) — holds the CRDT snapshot, the send log, the
+  destination registry, and Purgatory's contents. Chosen over MongoDB because everything Dispatch
+  Desk stores is simple key → value/blob access, not data that needs flexible cross-record
+  querying.
+
 ## Access & Collaboration
 
 - The app must be reachable and usable from any standards-compliant web browser — no native app,
@@ -77,9 +89,5 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   tool within a server (finer-grained).
 - Whether the app connects to MCP servers locally (stdio transport) or over remote HTTP isn't
   decided.
-- Sync/relay hosting isn't decided: self-host a small Node relay (e.g. based on y-websocket) with
-  a persistence hook into a datastore (Postgres/SQLite/Redis), or use a managed realtime backend
-  built for this (PartyKit, Liveblocks). Either way, this needs a process that can hold long-lived
-  connections, which doesn't fit a plain Vercel serverless function (same limitation already
-  flagged for fed-server) — the sync server needs somewhere always-on (Fly.io, Render, a VPS) or a
-  managed service, while the static frontend can stay on Vercel.
+- Whether the MCP Host runs as part of the same Node/TypeScript server process as the Sync Server
+  (the natural choice, since it's already on Fly.io) or separately isn't explicitly confirmed yet.
