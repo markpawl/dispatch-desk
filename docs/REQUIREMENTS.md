@@ -79,6 +79,11 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - **File/folder-shaped destinations go through cloud storage, not the local filesystem.** "A new
   file in a project folder" means a folder in Google Drive and/or Dropbox, reached via their own
   MCP servers over HTTP — not a directory on the user's machine.
+- **Deliberate temporary deviation: the first real destination (a Google Doc) is a direct Drive/Docs
+  API integration in the server, not an MCP tool.** Building the MCP Host plus a remote-HTTP MCP
+  server just to ship one destination was judged not worth the upfront cost before any destination
+  existed at all. See `docs/IDEAS.md`'s Pending section for reconciling this back into the MCP
+  architecture above once there's more than one destination to justify it.
 
 ## Hosting & Server Stack
 
