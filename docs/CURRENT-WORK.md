@@ -27,3 +27,27 @@ nothing is in flight. **The rules below survive every clear-out — never remove
      plan.
 4. **Style**: scannable — tables/checkboxes/short bullets, not prose. Match the terse, directional
    tone already established for `docs/IDEAS.md` work.
+
+## Active plan: Channels/destinations right-side panel (`docs/IDEAS.md` Pending item 1)
+
+Client-only UI scaffold, dummy data throughout — no MCP Host, no real channel/destination config
+yet (that's later work; see `docs/IDEAS.md`'s other Pending items).
+
+### Group A: static panel with two dummy lists
+
+- [ ] `client/src/components/DestinationsPanel.tsx` (new) — presentational component, `open: boolean`
+      prop, renders `null` when closed. When open, renders an `<aside>` with two labeled sections,
+      **Channels** and **Destinations**, each an unordered list of hardcoded placeholder items:
+      - Channels (the destination *types*): Email, Google Drive folder, Data store row.
+      - Destinations (configured *instances* of a channel): e.g. "Email → jane@example.com",
+        "Google Drive folder → Marketing", "Data store row → Leads table".
+      No click behavior on items yet — display only.
+- [ ] `client/src/App.tsx` — add a toggle button (toolbar row, alongside Send) and
+      `destinationsPanelOpen` state; wrap `EditorContent` + the new panel in a flex row container
+      so the panel takes real width next to the editor when open, matching
+      `docs/REQUIREMENTS.md`'s "togglable panel on the right edge of the screen."
+- [ ] `client/src/App.css` — layout for the new wrapper row + panel styling (fixed width, border,
+      scrollable list, section headings).
+- [ ] `client/src/components/DestinationsPanel.test.tsx` (new) — renders nothing when closed;
+      renders both section headings and their dummy items when open.
+- [ ] `client/src/App.test.tsx` — toggle button shows/hides the panel.
