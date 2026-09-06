@@ -11,7 +11,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
-    "@upstash/redis": "^1.34.3",
+    "ioredis": "^6.0.0",
     "lib0": "^0.2.99",
     "ws": "^8.18.0",
     "y-protocols": "^1.0.6",

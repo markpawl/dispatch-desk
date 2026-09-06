@@ -1,4 +1,4 @@
-import { Redis } from '@upstash/redis'
+import { Redis } from 'ioredis'
 
 // The single shared desktop's CRDT state lives under one fixed key (see
 // docs/REQUIREMENTS.md: one document, no multiple/named desktops for now).
@@ -8,29 +8,36 @@ let client: Redis | undefined
 
 function getClient(): Redis | undefined {
   if (client) return client
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+  if (!process.env.REDIS_URL) {
     console.warn(
-      '[redis] UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN not set -- running with no ' +
-        'persistence (desktop content will not survive a restart).',
+      '[redis] REDIS_URL not set -- running with no persistence (desktop content will not ' +
+        'survive a restart).',
     )
     return undefined
   }
-  client = Redis.fromEnv()
+  client = new Redis(process.env.REDIS_URL)
+  // Without a listener, ioredis's own retry/reconnect errors are unhandled
+  // EventEmitter errors and crash the process; log instead -- a transient
+  // connection blip shouldn't take down the Sync Server.
+  client.on('error', (error: Error) => {
+    console.error('[redis] connection error', error)
+  })
   return client
 }
 
-// Yjs state is binary; Upstash's REST API is JSON-based, so it's stored as
-// base64 rather than raw bytes.
+// A real Redis connection is binary-safe over the wire, unlike Upstash's
+// JSON-based REST API (which needed base64) -- Yjs state stores and loads
+// as a plain Buffer.
 export async function loadDesktopState(): Promise<Uint8Array | null> {
   const redis = getClient()
   if (!redis) return null
-  const encoded = await redis.get<string>(DESKTOP_STATE_KEY)
-  if (!encoded) return null
-  return new Uint8Array(Buffer.from(encoded, 'base64'))
+  const buffer = await redis.getBuffer(DESKTOP_STATE_KEY)
+  if (!buffer) return null
+  return new Uint8Array(buffer)
 }
 
 export async function persistDesktopState(state: Uint8Array): Promise<void> {
   const redis = getClient()
   if (!redis) return
-  await redis.set(DESKTOP_STATE_KEY, Buffer.from(state).toString('base64'))
+  await redis.set(DESKTOP_STATE_KEY, Buffer.from(state))
 }

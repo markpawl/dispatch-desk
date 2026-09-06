@@ -35,19 +35,25 @@ call, not decommissioned as part of this plan). Decisions: Redis client is `iore
 TCP/`REDIS_URL`, replacing `@upstash/redis`'s REST client, which can't talk to Railway's Redis at
 all); `fly.toml` stays in the repo as a dormant fallback rather than being deleted.
 
-### Group A — Swap Redis client (Upstash REST -> ioredis/TCP)
+### Group A — Swap Redis client (Upstash REST -> ioredis/TCP) ✅
 
-- [ ] `server/package.json`: remove `@upstash/redis`, add `ioredis` (+ `@types/ioredis` if not
-  bundled).
-- [ ] `server/src/redis.ts`: rewrite `getClient`/`loadDesktopState`/`persistDesktopState` around
+- [x] `server/package.json`: remove `@upstash/redis`, add `ioredis` (ships its own types, no
+  separate `@types/ioredis` needed).
+- [x] `server/src/redis.ts`: rewrite `getClient`/`loadDesktopState`/`persistDesktopState` around
   `ioredis`, reading a single `REDIS_URL` (Railway's injected var) instead of
   `UPSTASH_REDIS_REST_URL`/`_TOKEN`. Real Redis is binary-safe over the wire, so this also drops the
-  base64 encode/decode round-trip Upstash's JSON-based REST API required (`setBuffer`/`getBuffer` or
-  equivalent) -- same exported function signatures, so `syncServer.ts` doesn't change.
-- [ ] `server/src/redis.test.ts`: update the mock/assertions for `ioredis` instead of `@upstash/redis`;
-  keep the "no `REDIS_URL` -> null/no-op, no persistence" behavior covered.
-- [ ] `server/.env.example`: swap `UPSTASH_REDIS_REST_URL`/`_TOKEN` for `REDIS_URL`.
-- [ ] Run server tests/lint/build.
+  base64 encode/decode round-trip Upstash's JSON-based REST API required -- uses `set`/`getBuffer`
+  directly on a `Buffer` -- same exported function signatures, so `syncServer.ts` didn't change.
+- [x] `server/src/redis.test.ts`: updated for `REDIS_URL`; kept the "not set -> null/no-op, no
+  persistence" behavior covered.
+- [x] `server/.env.example`: swapped `UPSTASH_REDIS_REST_URL`/`_TOKEN` for `REDIS_URL`.
+- [x] Run server tests/lint/build.
+
+_(Done: also verified against a real local `redis-server` -- a raw byte round-trip (values 0/128/
+250/255 included) came back byte-identical, and a full app-level check (type text -> wait past the
+2s persist debounce -> kill the server -> start a fresh one -> reload) showed the typed content
+survived the restart, proving the new binary-safe path actually works end-to-end, not just against
+the "no REDIS_URL" unit tests.)_
 
 ### Group B — Point deployment config + docs at Railway
 

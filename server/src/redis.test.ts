@@ -3,8 +3,7 @@ import { loadDesktopState, persistDesktopState } from './redis.js'
 
 describe('redis persistence, no credentials configured', () => {
   afterEach(() => {
-    delete process.env.UPSTASH_REDIS_REST_URL
-    delete process.env.UPSTASH_REDIS_REST_TOKEN
+    delete process.env.REDIS_URL
   })
 
   it('loadDesktopState resolves to null rather than throwing', async () => {
