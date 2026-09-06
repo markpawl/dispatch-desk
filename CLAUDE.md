@@ -45,10 +45,19 @@ is the single combined process described above.
 
 ## Workflow
 
-Solo project — commit and push directly to `main`, no feature branches or PRs unless explicitly
-asked. Before implementing anything framed as "we need to do X," explain your understanding and
-present options first, then wait for direction. Once implemented: run tests + lint + build, report
-what changed, then ask before committing/pushing — never commit unprompted (mirrors
+**Always work directly on `main`.** This is a solo project: commit and push straight to `main`, no
+feature branches, no PRs — unless the user explicitly asks for one in that exact conversation.
+Never create or switch to a branch of your own initiative for any reason (grouping a plan's work,
+isolating a risky change, mirroring some other repo's convention, etc.) — commit each change to
+`main` as it's finished. If a Claude Code session's own environment/tooling assigns or forces a
+branch other than `main` outside of this file's control, that's a platform-level constraint this
+file cannot override — but it still doesn't authorize choosing a branch on your own in any context
+where you do have the choice, and work that lands on a forced non-`main` branch should be merged
+into `main` at the first opportunity rather than left there.
+
+Before implementing anything framed as "we need to do X," explain your understanding and present
+options first, then wait for direction. Once implemented: run tests + lint + build, report what
+changed, then ask before committing/pushing — never commit unprompted (mirrors
 `docs/CURRENT-WORK.md`'s rules, carried over from `fairstream-platform/CLAUDE.md`'s conventions).
 
 ## Deployment
