@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -93,5 +93,88 @@ describe('App', () => {
     render(<App />)
     expect(await screen.findByText('Google connected')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Connect Google' })).not.toBeInTheDocument()
+  })
+
+  // The Link extension is configured with `openOnClick: false` (App.tsx) --
+  // a plain click/tap on a link places the cursor, it doesn't navigate. The
+  // long-press/right-click "Follow Link" menu (lib/linkFollowMenu.ts,
+  // components/LinkFollowMenu.tsx) is the only way to actually open one.
+  describe('link follow menu', () => {
+    async function renderWithLink() {
+      render(<App />)
+      const editorEl = await screen.findByRole('textbox')
+      await userEvent.type(editorEl, 'click here')
+      await userEvent.keyboard('{Control>}a{/Control}')
+      vi.spyOn(window, 'prompt').mockReturnValue('https://example.com/page')
+      await userEvent.click(screen.getByTitle('Link'))
+      const link = await waitFor(() => {
+        const anchor = editorEl.querySelector<HTMLAnchorElement>('a')
+        if (!anchor) throw new Error('link not rendered yet')
+        return anchor
+      })
+      return link
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('opens on right-click over a link and follows it on request', async () => {
+      const link = await renderWithLink()
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+      fireEvent.contextMenu(link, { clientX: 40, clientY: 60 })
+
+      const item = await screen.findByRole('menuitem', { name: 'Follow Link' })
+      await userEvent.click(item)
+
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://example.com/page',
+        '_blank',
+        'noopener,noreferrer',
+      )
+      expect(screen.queryByRole('menuitem', { name: 'Follow Link' })).not.toBeInTheDocument()
+    })
+
+    it('opens on a touch long-press, but not before the hold completes', async () => {
+      const link = await renderWithLink()
+
+      vi.useFakeTimers()
+      try {
+        fireEvent.touchStart(link, { touches: [{ clientX: 10, clientY: 10 }] })
+        act(() => vi.advanceTimersByTime(300))
+        expect(screen.queryByRole('menuitem', { name: 'Follow Link' })).not.toBeInTheDocument()
+
+        act(() => vi.advanceTimersByTime(300))
+        expect(screen.getByRole('menuitem', { name: 'Follow Link' })).toBeInTheDocument()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('cancels the long-press if the touch drifts before the hold completes', async () => {
+      const link = await renderWithLink()
+
+      vi.useFakeTimers()
+      try {
+        fireEvent.touchStart(link, { touches: [{ clientX: 10, clientY: 10 }] })
+        fireEvent.touchMove(link, { touches: [{ clientX: 40, clientY: 40 }] })
+        act(() => vi.advanceTimersByTime(600))
+
+        expect(screen.queryByRole('menuitem', { name: 'Follow Link' })).not.toBeInTheDocument()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('closes when clicking outside the menu', async () => {
+      const link = await renderWithLink()
+      fireEvent.contextMenu(link, { clientX: 40, clientY: 60 })
+      await screen.findByRole('menuitem', { name: 'Follow Link' })
+
+      await userEvent.click(document.body)
+
+      expect(screen.queryByRole('menuitem', { name: 'Follow Link' })).not.toBeInTheDocument()
+    })
   })
 })

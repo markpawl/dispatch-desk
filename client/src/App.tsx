@@ -6,8 +6,11 @@ import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { EditorToolbar } from './components/EditorToolbar'
+import type { LinkFollowMenuState } from './components/LinkFollowMenu'
+import { LinkFollowMenu } from './components/LinkFollowMenu'
 import { SendMenu } from './components/SendMenu'
 import { createDesktopDoc } from './lib/desktopDoc'
+import { LinkFollowMenu as LinkFollowMenuExtension } from './lib/linkFollowMenu'
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
@@ -23,6 +26,11 @@ function App() {
   // null while the initial /api/google/status check is in flight, so the
   // indicator doesn't flash "not connected" before it actually knows.
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
+  // Set by LinkFollowMenuExtension on right-click/long-press over a link;
+  // cleared to close the popup. `setLinkMenu`'s identity is stable across
+  // renders, so passing it into the memoized `extensions` below doesn't
+  // require adding it to that memo's deps.
+  const [linkMenu, setLinkMenu] = useState<LinkFollowMenuState | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -61,6 +69,9 @@ function App() {
       Collaboration.configure({ fragment }),
       TextStyle,
       Color,
+      LinkFollowMenuExtension.configure({
+        onRequestMenu: (href, x, y) => setLinkMenu({ href, x, y }),
+      }),
     ],
     [fragment],
   )
@@ -98,6 +109,7 @@ function App() {
         <SendMenu editor={editor} />
       </div>
       <EditorContent className="desktop-editor" editor={editor} />
+      <LinkFollowMenu state={linkMenu} onClose={() => setLinkMenu(null)} />
     </div>
   )
 }
