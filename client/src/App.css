@@ -61,13 +61,20 @@
   color: #c0392b;
 }
 
+.desktop-toolbar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 .editor-toolbar {
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
   padding: 0.4rem;
-  margin-bottom: 0.5rem;
   border: 1px solid #ccc;
   border-radius: 6px;
 }
@@ -113,6 +120,93 @@
 .editor-toolbar .color-swatch.active {
   outline: 2px solid #1f6feb;
   outline-offset: 1px;
+}
+
+.send-menu {
+  position: relative;
+}
+
+.send-menu > button {
+  height: calc(1.75rem + 0.8rem + 2px); /* matches .editor-toolbar's height */
+  padding: 0 0.9rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: #1f6feb;
+  border: 1px solid #1f6feb;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.send-menu > button:disabled {
+  background: #b9c9e8;
+  border-color: #b9c9e8;
+  cursor: default;
+}
+
+.send-menu-popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 10;
+  width: 16rem;
+  padding: 0.6rem;
+  background: canvas;
+  color: canvastext;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.send-menu-search {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.send-menu-destinations,
+.send-menu-results {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.send-menu-destinations button,
+.send-menu-results button {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.send-menu-destinations button:hover,
+.send-menu-results button:hover {
+  background: #e6f0ff;
+}
+
+.send-menu-status {
+  font-size: 0.8rem;
+  color: #888;
+  padding: 0.2rem 0.4rem;
+}
+
+.send-menu-error {
+  font-size: 0.8rem;
+  color: #c0392b;
+  padding: 0.2rem 0.4rem;
 }
 
 .desktop-editor {

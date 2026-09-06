@@ -141,21 +141,32 @@ entries, id lookup, and the send-log entry shape all round-tripped correctly thr
 The full HTTP `/api/send` round-trip against a real Google Doc still needs the user's own Google
 Cloud setup from Group A.)_
 
-### Group D — Client UI: send button, destination picker, delete-on-send
+### Group D — Client UI: send button, destination picker, delete-on-send ✅
 
-- [ ] `client/src/components/SendMenu.tsx` (new): a "Send" toolbar button (in `EditorToolbar.tsx`),
-  enabled only when the editor has a non-empty selection. Click opens a popover: saved destinations
-  (from `/api/destinations`, click to send immediately) plus a search box (calls
-  `/api/google-docs/search?q=`) for picking/searching a new Google Doc when no saved destination
-  fits, or a "Connect Google" prompt when `/api/google/status` says not connected.
-- [ ] `App.tsx`: on a successful `/api/send`, delete the selected range from the editor
-  (`editor.chain().focus().deleteSelection().run()`) -- the "delete the sent text from the desktop"
-  half of the Send flow decision.
-- [ ] `App.css`: styling for the send button, popover, and destination list/search box, matching the
-  toolbar's existing look.
-- [ ] Tests: component tests for `SendMenu` (enabled/disabled on selection state, renders saved
-  destinations, search-then-send flow, delete-after-send) with `fetch` mocked -- no real Google or
-  server round-trip needed for these.
-- [ ] Run tests/lint/build, plus a Playwright pass against the built app with the `/api/*` endpoints
-  mocked at the network layer (real Google auth still isn't reachable from this sandbox) to confirm
-  the send button, popover, and post-send deletion all wire together correctly in a real browser.
+- [x] `client/src/components/SendMenu.tsx` (new): a "Send" button, enabled only when the editor has
+  a non-empty selection (tracked via `useEditorState`, matching `EditorToolbar.tsx`'s pattern).
+  Click opens a popover: saved destinations (from `/api/destinations`, click to send immediately)
+  plus a search box (calls `/api/google-docs/search?q=`) for picking/searching a new Google Doc, or
+  a "Connect Google" prompt when `/api/google/status` says not connected. Closes on click-away.
+  Rendered as a sibling of `EditorToolbar` (a `.desktop-toolbar-row` wrapping both) in `App.tsx`
+  rather than nested inside `EditorToolbar.tsx` itself, since `EditorToolbar` doesn't otherwise need
+  to know about Google-connection/destinations state -- functionally still "in the toolbar area" as
+  planned, just not literally the same component.
+- [x] Delete-on-send lives inside `SendMenu.tsx` itself (`editor.chain().focus().deleteSelection().run()`
+  right after a successful `/api/send`) rather than in `App.tsx`, since `SendMenu` already owns both
+  the editor reference and the send call -- no need to lift that logic up. The server-side log entry
+  (Group C) plus this client-side deletion together are the Send flow's default post-send action.
+- [x] `App.css`: `.desktop-toolbar-row`, `.send-menu`/`.send-menu-popover` and its contents.
+- [x] Tests: `SendMenu.test.tsx` (5 tests, `fetch` mocked, a real minimal Tiptap editor as a test
+  harness -- selection gating, the not-connected prompt, sending to a saved destination
+  incl. delete-after-send, search-then-send to a new doc, and an error response leaving the
+  selection untouched).
+- [x] Run tests/lint/build.
+
+_(Done: 58 tests total across both packages (9 client, 49 server), all passing. Also verified live
+in a real browser against the real built app (no Google/Redis configured, so only the
+not-connected path is reachable without the user's own Google Cloud setup): Send button correctly
+disabled with no selection, enabled after Ctrl+A, popover shows "Connect Google" with the right
+href, and closes on click-away without touching the desktop's text. The connected path (saved
+destinations, search, an actual successful send) is covered by the mocked component tests but still
+needs the user's real Google connection to exercise live.)_

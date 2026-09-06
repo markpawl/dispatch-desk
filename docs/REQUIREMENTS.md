@@ -24,6 +24,15 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   and/or Dropbox — not the local filesystem, for now); appended to an existing document; a row in
   a data store; AI-integrated into a larger body of information (merged into whichever of several
   files in a project folder it best fits).
+- **First concrete implementation (a Google Doc destination)**: trigger is a "Send" button (in the
+  toolbar area, `client/src/components/SendMenu.tsx`) rather than a right-click menu, since that
+  menu doesn't exist yet. Enabled only with a non-empty selection; opens a popover listing saved
+  destinations plus a Google Docs search box for picking/saving a new one. Auth is a real in-app
+  Google OAuth flow (`/auth/google`, single set of tokens in Redis — see Auth/Identity above). Both
+  halves of the default post-send action are implemented: the server writes a log entry
+  (`server/src/sendLog.ts`, a capped Redis list) and the client deletes the sent text from the
+  desktop on a successful send. This is a direct Drive/Docs API integration, not an MCP tool — see
+  the deviation noted under Destination Architecture below.
 
 ### Smart destination
 - Right-click → Destination → Smart invokes AI to suggest which registered destination a selection

@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { EditorToolbar } from './components/EditorToolbar'
+import { SendMenu } from './components/SendMenu'
 import { createDesktopDoc } from './lib/desktopDoc'
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
@@ -92,7 +93,10 @@ function App() {
           <span className={`status status-${status}`}>{status}</span>
         </div>
       </header>
-      <EditorToolbar editor={editor} />
+      <div className="desktop-toolbar-row">
+        <EditorToolbar editor={editor} />
+        <SendMenu editor={editor} />
+      </div>
       <EditorContent className="desktop-editor" editor={editor} />
     </div>
   )
