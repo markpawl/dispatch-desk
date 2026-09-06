@@ -55,18 +55,25 @@ _(Done: also verified against a real local `redis-server` -- a raw byte round-tr
 survived the restart, proving the new binary-safe path actually works end-to-end, not just against
 the "no REDIS_URL" unit tests.)_
 
-### Group B — Point deployment config + docs at Railway
+### Group B — Point deployment config + docs at Railway ✅
 
-- [ ] Add a minimal `railway.toml` (or `railway.json`) at repo root: healthcheck path `/healthz`,
-  restart policy -- mirroring what `fly.toml`'s `[http_service]` block covers today. Railway
-  auto-detects the root `Dockerfile` for the build itself, so no build config needed there.
-- [ ] `docs/REQUIREMENTS.md`'s Hosting & Server Stack section: replace "a single Fly.io app hosts
-  both..." with the Railway equivalent (still one service, one Dockerfile, one origin).
-- [ ] `CLAUDE.md`'s Deployment section: rewrite for Railway -- env vars set via Railway's
-  dashboard/CLI (`railway variables set`, or wiring `REDIS_URL` to the Redis plugin's reference
-  variable) instead of `fly secrets set`; note `fly.toml`/the Fly app are kept only as a dormant
-  fallback, not the active target.
-- [ ] Call out the manual, Railway-dashboard-only steps for the user to do themselves (nothing here
-  reaches Railway's API): create the Railway project, add the Redis plugin, wire `REDIS_URL` into the
-  app service's variables, first deploy.
-- [ ] Run full tests/lint/build once more after doc/config changes.
+- [x] Add a minimal `railway.toml` at repo root: `[build]` pins the root `Dockerfile` explicitly;
+  `[deploy]` sets healthcheck path `/healthz` + timeout and a restart policy -- mirroring what
+  `fly.toml`'s `[http_service]` block covered.
+- [x] `docs/REQUIREMENTS.md`'s Hosting & Server Stack section: "a single Fly.io app" -> "a single
+  Railway service" (2 mentions), plus the Redis bullet now names Railway's Redis plugin + `ioredis`
+  instead of Upstash, and the build-version-marker bullet no longer name-drops `fly deploy`
+  specifically.
+- [x] `CLAUDE.md`: Deployment section rewritten for Railway (`REDIS_URL` wired to the Redis plugin's
+  reference variable instead of Fly secrets; `railway.toml`'s healthcheck noted; `fly.toml`/the Fly
+  app called out as a dormant fallback, not the active target). Also fixed staleness in the Project
+  section left over from the Tiptap migration and the Group A Redis swap (still said `<textarea>`/
+  `Y.Text`/`useDesktopText.ts` -- deleted files/decisions from earlier this session -- and Upstash).
+- [x] Manual, Railway-dashboard-only steps the user still needs to do themselves (nothing reachable
+  from here): create the Railway project, add the Redis plugin, wire `REDIS_URL` into the app
+  service's variables, first deploy.
+- [x] Run full tests/lint/build once more after doc/config changes.
+
+_(Done: `railway.toml` validated as syntactically correct TOML via Python's `tomllib`, since there's
+no Railway CLI in this sandbox to check it against Railway's own schema. The actual Railway project
+creation, Redis plugin, and first deploy are still manual steps for the user -- see below.)_

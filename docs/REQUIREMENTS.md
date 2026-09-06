@@ -86,19 +86,24 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   `fairstream-artist-dashboard`'s existing stack. Considered Vue as an alternative: neither Yjs nor
   MCP favors one framework over the other (Yjs is framework-agnostic; MCP is backend-only), so
   there was no technical reason to break from the toolchain already established elsewhere.
-- A single Fly.io app hosts both the built React client and the Sync Server — one deploy, one
-  origin, no separate frontend host.
+- A single Railway service hosts both the built React client and the Sync Server — one deploy, one
+  origin, no separate frontend host. (Previously Fly.io; moved to Railway -- see git history around
+  this bullet's change for the reasoning. Railway builds straight from the repo's root `Dockerfile`,
+  so the container image itself didn't need to change.)
 - The server app is written in Node.js/TypeScript, matching Yjs's native ecosystem (`y-websocket`
   and its persistence adapters are Node-first) and the MCP TypeScript SDK. It hosts both the Sync
   Server and the MCP Host in the same process — no reason to split them once MCP connections are
-  remote-HTTP-only, so one Fly.io app covers all of it.
+  remote-HTTP-only, so one Railway service covers all of it.
 - **Build version marker**: what's actually deployed is identifiable via a build timestamp (Unix
   seconds), shown in the desktop UI header and in the server's `/healthz` response. The `Dockerfile`
   stamps it (`date +%s > BUILD_TIMESTAMP`) during the image build rather than deriving it from git —
-  no need to smuggle `.git` into the Docker build context or thread a build-arg through `fly deploy`,
-  and it's still a fresh, non-hand-maintained value on every image. Absent in local dev (no Docker
-  build step); both the client and server fall back visibly (`"dev"` / `null`) rather than guessing.
-- The datastore is Redis (e.g. via Upstash) — holds the CRDT snapshot, the send log, the
+  no need to smuggle `.git` into the Docker build context or thread a build-arg through the deploy
+  command, and it's still a fresh, non-hand-maintained value on every image. Absent in local dev (no
+  Docker build step); both the client and server fall back visibly (`"dev"` / `null`) rather than
+  guessing.
+- The datastore is Redis (provisioned via Railway's Redis plugin, reached over plain TCP with
+  `ioredis` -- not Upstash's REST API, which Railway's Redis can't speak) — holds the CRDT snapshot,
+  the send log, the
   destination registry, and Purgatory's contents. Chosen over MongoDB because everything Dispatch
   Desk stores is simple key → value/blob access, not data that needs flexible cross-record
   querying.
