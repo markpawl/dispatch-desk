@@ -79,6 +79,32 @@ describe('App', () => {
     await waitFor(() => expect(editor).toHaveTextContent('abc'))
   })
 
+  // BulletList's default input rule (lib/noAutoBulletList.ts) turns "- "/"* "
+  // typed at the start of a line into a list -- surprising on a plain
+  // writing surface, so it's disabled here. The toolbar/keyboard-shortcut
+  // path to a bullet list (EditorToolbar.tsx) is untouched.
+  describe('typed dash/asterisk at line start', () => {
+    it.each(['-', '*'])('does not turn "%s " into a bullet list', async (marker) => {
+      render(<App />)
+      const editor = await screen.findByRole('textbox')
+
+      await userEvent.type(editor, `${marker} still text`)
+
+      await waitFor(() => expect(editor).toHaveTextContent(`${marker} still text`))
+      expect(editor.querySelector('ul')).not.toBeInTheDocument()
+    })
+
+    it('still creates a bullet list via the toolbar button', async () => {
+      render(<App />)
+      const editor = await screen.findByRole('textbox')
+      await userEvent.type(editor, 'item one')
+
+      await userEvent.click(screen.getByTitle('Bullet list'))
+
+      await waitFor(() => expect(editor.querySelector('ul')).toBeInTheDocument())
+    })
+  })
+
   it('shows a Connect Google link when not connected', async () => {
     render(<App />)
     const link = await screen.findByRole('link', { name: 'Connect Google' })

@@ -12,6 +12,7 @@ import { LinkFollowMenu } from './components/LinkFollowMenu'
 import { SendMenu } from './components/SendMenu'
 import { createDesktopDoc } from './lib/desktopDoc'
 import { LinkFollowMenu as LinkFollowMenuExtension } from './lib/linkFollowMenu'
+import { BulletListNoAutoConvert } from './lib/noAutoBulletList'
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
@@ -69,8 +70,11 @@ function App() {
       // so the two don't fight over the same keyboard shortcuts/state.
       // Underline and Link are already bundled in StarterKit (Tiptap v3) --
       // only Link's default (open-on-click, wrong for an editable surface)
-      // needs overriding.
-      StarterKit.configure({ undoRedo: false, link: { openOnClick: false } }),
+      // needs overriding. bulletList is excluded here and re-added below via
+      // BulletListNoAutoConvert, which drops the "-"/"+"/"*"-triggers-a-list
+      // input rule while keeping toggleBulletList and everything else.
+      StarterKit.configure({ undoRedo: false, link: { openOnClick: false }, bulletList: false }),
+      BulletListNoAutoConvert,
       Collaboration.configure({ fragment }),
       TextStyle,
       Color,
