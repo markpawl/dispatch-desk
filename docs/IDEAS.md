@@ -17,34 +17,24 @@ landed.
 
 _Ordered easiest to hardest to implement._
 
-1. [destinations] Right-side area with two lists — channels and destinations: a togglable panel on
-   the right edge of the screen (refines `docs/REQUIREMENTS.md`'s Destination sidebar, which
-   currently describes only a single destinations list) showing two separate lists side by side or
-   stacked: **channels** (the available destination types/mechanisms, e.g. email, a cloud-storage
-   folder, a data-store row) and **destinations** (the configured instances created from them). A
-   destination is created by picking a channel and supplying its config — e.g. the Email channel's
-   config is a recipient address, a cloud-storage-folder channel's config is which folder/account.
-   Introduces "channel" as a new concept distinct from "destination" in
-   `docs/REQUIREMENTS.md`'s Destination Architecture section, which doesn't currently separate the
-   two.
-2. [destinations] Reconcile the Google Doc destination into the MCP Host architecture: it shipped as
+1. [destinations] Reconcile the Google Doc destination into the MCP Host architecture: it shipped as
    a direct Drive/Docs API integration in the server (see `docs/REQUIREMENTS.md`'s Destination
    Architecture section) rather than through an MCP Host/server, since standing up MCP infrastructure
    before any destination existed wasn't worth the upfront cost. Revisit once there's a second
    destination to justify building the MCP Host for real.
-3. [destinations] Harden what's live first: before adding destination features, add tests/health
+2. [destinations] Harden what's live first: before adding destination features, add tests/health
    checks around the Sync Server + Redis persistence, confirm Fly secrets are set, and consider a
    `/health` endpoint. Lower risk, but no new user-facing capability.
-4. [destinations] UI-first build order: build the right-click menu and destination sidebar
+3. [destinations] UI-first build order: build the right-click menu and destination sidebar
    (`docs/REQUIREMENTS.md`'s Key User Flows) against a stubbed/fake destination list, then swap in
    the real MCP Host once the UI is settled. Faster to see/demo, but risks rework if the MCP
    integration surfaces something the UI didn't anticipate.
-5. [destinations] Smallest end-to-end vertical slice: build the MCP Host in the server process plus
+4. [destinations] Smallest end-to-end vertical slice: build the MCP Host in the server process plus
    exactly one real destination, and wire the minimal send flow — select text → send to that
    destination → log entry + delete from desktop — fully end-to-end before building the sidebar,
-   Smart routing, or Purgatory. Superseded for now by item 2 above (the Google Doc destination
+   Smart routing, or Purgatory. Superseded for now by item 1 above (the Google Doc destination
    shipped without the MCP Host); revisit alongside it.
-6. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
+5. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
    machine via its own tunneled MCP server (mirroring `fairstream-artist-server`'s
    Cloudflare-tunnel pattern), so destinations like "a new file in a project folder" could target
    a real local directory instead of cloud storage. Deferred for now — real added complexity for
@@ -71,3 +61,12 @@ _Ordered easiest to hardest to implement._
    `client/src/vite-env.d.ts` + `App.tsx` (`.version` -- 0.75rem, `#888`, matching the smaller/grey
    ask) and `server/src/version.ts` + `index.ts`'s `/healthz` read it, falling back to `"dev"`/`null`
    in local dev.)_
+4. [destinations] Right-side area with two lists — channels and destinations: a togglable panel on
+   the right edge of the screen showing two separate lists, **channels** (the available destination
+   types/mechanisms) and **destinations** (the configured instances created from them), rather than
+   the single destinations list `docs/REQUIREMENTS.md` previously described. _(Landed the panel
+   itself with dummy/hardcoded data for both lists — see `docs/REQUIREMENTS.md`'s Destination
+   sidebar section and `client/src/components/DestinationsPanel.tsx`, toggled from a toolbar
+   button. Still open: the actual "create a destination by picking a channel and supplying its
+   config" flow — that's real functionality, not layout, and falls out of the still-pending MCP
+   Host work above (items 1 and 3).)_

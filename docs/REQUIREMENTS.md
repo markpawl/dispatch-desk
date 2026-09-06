@@ -39,8 +39,13 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   belongs to, instead of the user picking manually.
 
 ### Destination sidebar
-- A togglable panel on the right edge of the screen lists all destinations; selected text can be
-  sent directly from there, without going through the right-click menu first.
+- A togglable panel on the right edge of the screen (`client/src/components/DestinationsPanel.tsx`,
+  toggled via a toolbar button) shows two separate lists rather than one: **channels** (the
+  available destination types/mechanisms — e.g. email, a cloud-storage folder, a data-store row)
+  and **destinations** (the configured instances created from a channel plus its own config — e.g.
+  the Email channel configured with a specific recipient address). Currently both lists are
+  hardcoded placeholder data with no click behavior — display only, no real channel/destination
+  config or send-from-sidebar yet.
 
 ### Purgatory
 - Holds text that doesn't currently match any registered destination. When a new destination is
