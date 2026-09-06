@@ -112,23 +112,34 @@ Real search/append behavior against an actual Google Doc still needs the user's 
 verification once they've completed Group A's Google Cloud setup — not reachable from this
 sandbox.)_
 
-### Group C — Destinations registry + send log + `/api/send`
+### Group C — Destinations registry + send log + `/api/send` ✅
 
-- [ ] `server/src/destinations.ts` (new): Redis key `destinations` holding a JSON array of `{id,
-  type: 'google-doc', docId, docName, createdAt}`; `listDestinations()`, `saveDestination({docId,
-  docName})` (upsert by `docId` -- returns the existing entry if already saved, never duplicates).
-- [ ] `server/src/sendLog.ts` (new): Redis list `send-log`, `RPUSH` a JSON entry per send
-  (`{timestamp, destinationId, docName, textPreview}`, `textPreview` truncated to ~100 chars),
-  `LTRIM`'d to the most recent 200 -- unbounded growth isn't acceptable for a key meant to live in
-  Redis indefinitely.
-- [ ] `server/src/index.ts`: `GET /api/destinations` (list); `POST /api/send` (body `{text, docId,
-  docName}` or `{text, destinationId}` -- looks up `docId`/`docName` from the registry for the
-  latter) -- appends, upserts the destination, writes the log entry, returns `{ok: true,
-  destination}`.
-- [ ] Tests: unit tests for `destinations.ts` (upsert-by-docId behavior) and `sendLog.ts` (trim
-  behavior), plus a `/api/send` route test with `googleDocs`/`destinations`/`sendLog` all mocked,
-  covering both request shapes and the not-connected error case.
-- [ ] Run tests/lint/build.
+- [x] `server/src/destinations.ts` (new): Redis key `destinations` holding a JSON array of `{id,
+  type: 'google-doc', docId, docName, createdAt}`; `listDestinations()`, `getDestination(id)`,
+  `saveGoogleDocDestination(docId, docName)` (upsert by `docId` -- returns the existing entry if
+  already saved, first-saved name wins, never duplicates).
+- [x] `server/src/sendLog.ts` (new): Redis list `send-log`, `RPUSH` a JSON entry per send
+  (`{timestamp, destinationId, docName, textPreview}`, `textPreview` truncated to 100 chars via
+  `truncateForPreview`), `LTRIM`'d to the most recent 200 after every write -- unbounded growth
+  isn't acceptable for a key meant to live in Redis indefinitely.
+- [x] `server/src/requestHandler.ts`: `GET /api/destinations` (list); `POST /api/send` (body
+  `{text, docId, docName}` or `{text, destinationId}` -- looks up `docId`/`docName` from the
+  registry for the latter, 404 if unknown) -- appends via `appendTextToDoc`, upserts the
+  destination, writes the log entry, returns `{ok: true, destination}`. 400 on a missing/invalid
+  body, 401 on `GoogleNotConnectedError`, 405 on non-POST, 500 otherwise. Added a small
+  `readJsonBody` helper (raw Node `http`, no framework, matching the rest of this file).
+- [x] Tests: `destinations.test.ts` (5 tests -- upsert-by-docId, distinct docIds, lookup-by-id);
+  `sendLog.test.ts` (3 tests -- preview truncation, RPUSH+LTRIM shape); `requestHandler.test.ts`
+  +9 tests (`/api/destinations`, and `/api/send`'s two request shapes, 400/404/401/500/405 cases,
+  all with `googleDocs`/`destinations`/`sendLog` mocked).
+- [x] Run tests/lint/build.
+
+_(Done: 49 server tests total, all passing. Also verified `destinations.ts`/`sendLog.ts` against a
+real local `redis-server` directly (bypassing HTTP and Google entirely, since `appendTextToDoc`
+still needs a real Google connection this sandbox doesn't have) -- upsert-by-docId, distinct
+entries, id lookup, and the send-log entry shape all round-tripped correctly through real Redis.
+The full HTTP `/api/send` round-trip against a real Google Doc still needs the user's own Google
+Cloud setup from Group A.)_
 
 ### Group D — Client UI: send button, destination picker, delete-on-send
 

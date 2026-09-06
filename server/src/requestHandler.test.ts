@@ -9,13 +9,40 @@ const mocks = vi.hoisted(() => ({
   handleCallback: vi.fn(async (_code: string) => undefined),
   isGoogleConnected: vi.fn(async () => false),
   searchGoogleDocs: vi.fn(async (_query: string) => [{ id: 'doc-1', name: 'Meeting Notes' }]),
+  appendTextToDoc: vi.fn(async (_docId: string, _text: string) => undefined),
+  listDestinations: vi.fn(async () => [
+    { id: 'dest-1', type: 'google-doc' as const, docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+  ]),
+  getDestination: vi.fn(async (id: string) =>
+    id === 'dest-1'
+      ? { id: 'dest-1', type: 'google-doc' as const, docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' }
+      : undefined,
+  ),
+  saveGoogleDocDestination: vi.fn(async (docId: string, docName: string) => ({
+    id: 'dest-new',
+    type: 'google-doc' as const,
+    docId,
+    docName,
+    createdAt: 'now',
+  })),
+  appendSendLogEntry: vi.fn(async () => undefined),
 }))
 vi.mock('./googleAuth.js', () => mocks)
 // Keep the real GoogleNotConnectedError class (requestHandler.ts checks
-// `instanceof` on it) while mocking the actual search call.
+// `instanceof` on it) while mocking the actual search/append calls.
 vi.mock('./googleDocs.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./googleDocs.js')>()),
   searchGoogleDocs: mocks.searchGoogleDocs,
+  appendTextToDoc: mocks.appendTextToDoc,
+}))
+vi.mock('./destinations.js', () => ({
+  listDestinations: mocks.listDestinations,
+  getDestination: mocks.getDestination,
+  saveGoogleDocDestination: mocks.saveGoogleDocDestination,
+}))
+vi.mock('./sendLog.js', () => ({
+  appendSendLogEntry: mocks.appendSendLogEntry,
+  truncateForPreview: (text: string) => text,
 }))
 
 const { createRequestHandler } = await import('./requestHandler.js')
@@ -114,6 +141,92 @@ describe('requestHandler', () => {
     mocks.searchGoogleDocs.mockRejectedValueOnce(new Error('Drive API is down'))
     const response = await fetch(`${baseUrl}/api/google-docs/search?q=x`)
     expect(response.status).toBe(500)
+  })
+
+  it('GET /api/destinations lists saved destinations', async () => {
+    const response = await fetch(`${baseUrl}/api/destinations`)
+    expect(await response.json()).toEqual({
+      destinations: [
+        { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+      ],
+    })
+  })
+
+  describe('POST /api/send', () => {
+    it('sends to an existing destinationId: appends, upserts, logs', async () => {
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'hello world', destinationId: 'dest-1' }),
+      })
+      expect(mocks.appendTextToDoc).toHaveBeenCalledWith('doc-1', 'hello world')
+      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('doc-1', 'Meeting Notes')
+      expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
+        expect.objectContaining({ docName: 'Meeting Notes', textPreview: 'hello world' }),
+      )
+      const body = (await response.json()) as { ok: boolean; destination: { docId: string } }
+      expect(body.ok).toBe(true)
+      expect(body.destination.docId).toBe('doc-1')
+    })
+
+    it('sends to an ad-hoc docId/docName, saving it as a new destination', async () => {
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'hi', docId: 'doc-2', docName: 'Journal' }),
+      })
+      expect(mocks.appendTextToDoc).toHaveBeenCalledWith('doc-2', 'hi')
+      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('doc-2', 'Journal')
+      expect(response.status).toBe(200)
+    })
+
+    it('400s when text is missing', async () => {
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ destinationId: 'dest-1' }),
+      })
+      expect(response.status).toBe(400)
+      expect(mocks.appendTextToDoc).not.toHaveBeenCalled()
+    })
+
+    it('400s when neither destinationId nor docId/docName are given', async () => {
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'hello' }),
+      })
+      expect(response.status).toBe(400)
+    })
+
+    it('404s for an unknown destinationId', async () => {
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'hello', destinationId: 'does-not-exist' }),
+      })
+      expect(response.status).toBe(404)
+      expect(mocks.appendTextToDoc).not.toHaveBeenCalled()
+    })
+
+    it('401s when Google is not connected', async () => {
+      const { GoogleNotConnectedError } = await import('./googleDocs.js')
+      mocks.appendTextToDoc.mockRejectedValueOnce(new GoogleNotConnectedError())
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'hello', destinationId: 'dest-1' }),
+      })
+      expect(response.status).toBe(401)
+    })
+
+    it('500s on any other failure', async () => {
+      mocks.appendTextToDoc.mockRejectedValueOnce(new Error('Docs API is down'))
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'hello', destinationId: 'dest-1' }),
+      })
+      expect(response.status).toBe(500)
+    })
+
+    it('405s on GET', async () => {
+      const response = await fetch(`${baseUrl}/api/send`)
+      expect(response.status).toBe(405)
+    })
   })
 
   it('falls back to serving the client for any other path', async () => {
