@@ -5,6 +5,7 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { DestinationsPanel } from './components/DestinationsPanel'
 import { EditorToolbar } from './components/EditorToolbar'
 import type { LinkFollowMenuState } from './components/LinkFollowMenu'
 import { LinkFollowMenu } from './components/LinkFollowMenu'
@@ -31,6 +32,10 @@ function App() {
   // renders, so passing it into the memoized `extensions` below doesn't
   // require adding it to that memo's deps.
   const [linkMenu, setLinkMenu] = useState<LinkFollowMenuState | null>(null)
+  // Toggles the right-side channels/destinations panel (docs/IDEAS.md's
+  // Pending item 1) -- closed by default, same as the Destination sidebar
+  // it extends (docs/REQUIREMENTS.md).
+  const [destinationsPanelOpen, setDestinationsPanelOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -107,8 +112,19 @@ function App() {
       <div className="desktop-toolbar-row">
         <EditorToolbar editor={editor} />
         <SendMenu editor={editor} />
+        <button
+          type="button"
+          className={destinationsPanelOpen ? 'destinations-toggle active' : 'destinations-toggle'}
+          onClick={() => setDestinationsPanelOpen((open) => !open)}
+          title="Toggle channels & destinations"
+        >
+          Destinations
+        </button>
       </div>
-      <EditorContent className="desktop-editor" editor={editor} />
+      <div className="desktop-main">
+        <EditorContent className="desktop-editor" editor={editor} />
+        <DestinationsPanel open={destinationsPanelOpen} />
+      </div>
       <LinkFollowMenu state={linkMenu} onClose={() => setLinkMenu(null)} />
     </div>
   )

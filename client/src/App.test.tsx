@@ -177,4 +177,21 @@ describe('App', () => {
       expect(screen.queryByRole('menuitem', { name: 'Follow Link' })).not.toBeInTheDocument()
     })
   })
+
+  // The right-side panel from docs/IDEAS.md's Pending item 1 -- dummy data
+  // only for now (components/DestinationsPanel.test.tsx covers its content
+  // in isolation); this just checks the toolbar toggle wires up to it.
+  it('toggles the channels/destinations panel via the toolbar button', async () => {
+    render(<App />)
+    await screen.findByRole('textbox')
+    expect(screen.queryByRole('heading', { name: 'Channels' })).not.toBeInTheDocument()
+
+    const toggle = screen.getByTitle('Toggle channels & destinations')
+    await userEvent.click(toggle)
+    expect(screen.getByRole('heading', { name: 'Channels' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Destinations' })).toBeInTheDocument()
+
+    await userEvent.click(toggle)
+    expect(screen.queryByRole('heading', { name: 'Channels' })).not.toBeInTheDocument()
+  })
 })
