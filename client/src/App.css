@@ -224,10 +224,10 @@
 }
 
 .desktop-main {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
-  gap: 0.5rem;
 }
 
 .desktop-editor {
@@ -239,15 +239,24 @@
   border-radius: 6px;
 }
 
-/* The channels/destinations panel (components/DestinationsPanel.tsx). */
+/* The channels/destinations panel (components/DestinationsPanel.tsx).
+   Overlays the editor rather than sharing space with it -- positioned
+   against .desktop-main (the nearest positioned ancestor) so it floats on
+   top of the desktop's contents instead of shrinking the editor. */
 .destinations-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   width: 220px;
-  flex-shrink: 0;
   box-sizing: border-box;
+  background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
   padding: 0.75rem;
   overflow-y: auto;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
 }
 
 .destinations-panel section + section {
