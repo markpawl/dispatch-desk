@@ -87,21 +87,30 @@ right href. The actual consent-screen round-trip (real Google account, real `GOO
 `_SECRET`) still needs the user's own Google Cloud project and manual verification -- not reachable
 from this sandbox.)_
 
-### Group B — Search + append (library + read-only endpoint)
+### Group B — Search + append (library + read-only endpoint) ✅
 
-- [ ] `server/src/googleDocs.ts` (new): `searchGoogleDocs(query)` (Drive `files.list`, `q:
-  "mimeType='application/vnd.google-apps.document' and trashed=false and name contains '...'"`,
-  fields `id,name`), `appendTextToDoc(docId, text)` (Docs `documents.batchUpdate`, an `insertText`
-  request at `endOfSegmentLocation` -- appends without needing to know the doc's current length;
-  note this always prepends a newline before the appended text, so a doc's very first send gets one
-  leading blank line -- accepted as a minor, harmless quirk rather than an extra `documents.get`
-  round-trip just to avoid it).
-- [ ] `server/src/index.ts`: `GET /api/google-docs/search?q=...` (401/error if not connected).
-- [ ] Tests: `googleDocs.ts` unit tests with `googleapis` mocked (query construction, response
-  mapping, the append request shape).
-- [ ] Run tests/lint/build. **Real search/append behavior against an actual Google Doc still needs
-  the user's manual verification** — I can only verify the request shapes are correct per the API's
-  documented contract, not that Google's servers accept them.
+- [x] `server/src/googleDocs.ts` (new): `searchGoogleDocs(query)` (Drive `files.list`, `q:
+  "mimeType='application/vnd.google-apps.document' and trashed=false and name contains '...'"` --
+  the name clause is omitted entirely for an empty/whitespace query, for browsing rather than an
+  empty Drive `contains` clause; fields `id,name`), `appendTextToDoc(docId, text)` (Docs
+  `documents.batchUpdate`, an `insertText` request at `endOfSegmentLocation` -- appends without
+  needing to know the doc's current length; always prepends a newline before the appended text, so
+  a doc's very first send gets one leading blank line -- accepted as a minor, harmless quirk rather
+  than an extra `documents.get` round-trip just to avoid it). Both throw `GoogleNotConnectedError`
+  (exported) when `getAuthorizedClient()` returns null.
+- [x] `server/src/requestHandler.ts`: `GET /api/google-docs/search?q=...` -- 401 on
+  `GoogleNotConnectedError`, 500 on any other failure.
+- [x] Tests: `googleDocs.test.ts` (6 tests, `googleapis` mocked -- query construction incl. the
+  empty-query and quote-escaping edge cases, response mapping incl. the untitled-doc fallback, the
+  append request shape, `GoogleNotConnectedError` from both operations); `requestHandler.test.ts`
+  +4 tests for the new route (success, default empty query, 401, 500).
+- [x] Run tests/lint/build.
+
+_(Done: also ran the real built server (fake Google credentials, no stored tokens) and confirmed
+`GET /api/google-docs/search` returns a real 401 with the expected error body when not connected.
+Real search/append behavior against an actual Google Doc still needs the user's manual
+verification once they've completed Group A's Google Cloud setup — not reachable from this
+sandbox.)_
 
 ### Group C — Destinations registry + send log + `/api/send`
 

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { getAuthUrl, handleCallback, isGoogleConnected } from './googleAuth.js'
+import { GoogleNotConnectedError, searchGoogleDocs } from './googleDocs.js'
 import { serveStatic } from './staticFiles.js'
 import { BUILD_TIMESTAMP } from './version.js'
 
@@ -60,6 +61,25 @@ export function createRequestHandler(clientDistDir: string) {
           console.error('[auth] failed to check Google connection status', error)
           res.writeHead(500, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ connected: false }))
+        })
+      return
+    }
+
+    if (url.pathname === '/api/google-docs/search') {
+      searchGoogleDocs(url.searchParams.get('q') ?? '')
+        .then((docs) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ docs }))
+        })
+        .catch((error: unknown) => {
+          if (error instanceof GoogleNotConnectedError) {
+            res.writeHead(401, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: error.message }))
+            return
+          }
+          console.error('[google-docs] search failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Google Docs search failed' }))
         })
       return
     }

@@ -8,8 +8,15 @@ const mocks = vi.hoisted(() => ({
   getAuthUrl: vi.fn(() => 'https://accounts.google.com/mock-consent-screen'),
   handleCallback: vi.fn(async (_code: string) => undefined),
   isGoogleConnected: vi.fn(async () => false),
+  searchGoogleDocs: vi.fn(async (_query: string) => [{ id: 'doc-1', name: 'Meeting Notes' }]),
 }))
 vi.mock('./googleAuth.js', () => mocks)
+// Keep the real GoogleNotConnectedError class (requestHandler.ts checks
+// `instanceof` on it) while mocking the actual search call.
+vi.mock('./googleDocs.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./googleDocs.js')>()),
+  searchGoogleDocs: mocks.searchGoogleDocs,
+}))
 
 const { createRequestHandler } = await import('./requestHandler.js')
 
@@ -83,6 +90,30 @@ describe('requestHandler', () => {
     mocks.isGoogleConnected.mockResolvedValueOnce(true)
     const response = await fetch(`${baseUrl}/api/google/status`)
     expect(await response.json()).toEqual({ connected: true })
+  })
+
+  it('GET /api/google-docs/search returns matching docs', async () => {
+    const response = await fetch(`${baseUrl}/api/google-docs/search?q=Meeting`)
+    expect(mocks.searchGoogleDocs).toHaveBeenCalledWith('Meeting')
+    expect(await response.json()).toEqual({ docs: [{ id: 'doc-1', name: 'Meeting Notes' }] })
+  })
+
+  it('GET /api/google-docs/search defaults to an empty query when q is omitted', async () => {
+    await fetch(`${baseUrl}/api/google-docs/search`)
+    expect(mocks.searchGoogleDocs).toHaveBeenCalledWith('')
+  })
+
+  it('GET /api/google-docs/search is a 401 when Google is not connected', async () => {
+    const { GoogleNotConnectedError } = await import('./googleDocs.js')
+    mocks.searchGoogleDocs.mockRejectedValueOnce(new GoogleNotConnectedError())
+    const response = await fetch(`${baseUrl}/api/google-docs/search?q=x`)
+    expect(response.status).toBe(401)
+  })
+
+  it('GET /api/google-docs/search is a 500 on any other failure', async () => {
+    mocks.searchGoogleDocs.mockRejectedValueOnce(new Error('Drive API is down'))
+    const response = await fetch(`${baseUrl}/api/google-docs/search?q=x`)
+    expect(response.status).toBe(500)
   })
 
   it('falls back to serving the client for any other path', async () => {
