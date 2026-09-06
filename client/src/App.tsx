@@ -19,6 +19,24 @@ const buildTimestamp = import.meta.env.VITE_BUILD_TIMESTAMP
 function App() {
   const [{ fragment, provider }] = useState(() => createDesktopDoc())
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
+  // null while the initial /api/google/status check is in flight, so the
+  // indicator doesn't flash "not connected" before it actually knows.
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/google/status')
+      .then((response) => response.json())
+      .then((body: { connected: boolean }) => {
+        if (!cancelled) setGoogleConnected(body.connected)
+      })
+      .catch((error: unknown) => {
+        console.error('failed to check Google connection status', error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Memoized (and pinned to `fragment` via useEditor's deps below) so this
   // array -- and the extension instances in it -- keeps the same identity
@@ -65,6 +83,12 @@ function App() {
           <span className="version" title="When this deployment was built">
             {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
           </span>
+          {googleConnected === false && (
+            <a className="google-connect" href="/auth/google">
+              Connect Google
+            </a>
+          )}
+          {googleConnected === true && <span className="google-connected">Google connected</span>}
           <span className={`status status-${status}`}>{status}</span>
         </div>
       </header>

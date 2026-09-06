@@ -11,6 +11,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
+    "googleapis": "^178.0.0",
     "ioredis": "^6.0.0",
     "lib0": "^0.2.99",
     "ws": "^8.18.0",

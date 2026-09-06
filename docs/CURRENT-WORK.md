@@ -50,27 +50,42 @@ can be live-verified against a real Google account:**
 4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — Railway service variables
    for production, `server/.env` for local dev.
 
-### Group A — Google OAuth connect flow
+### Group A — Google OAuth connect flow ✅
 
-- [ ] `server/package.json`: add `googleapis` (bundles Drive v3, Docs v1, and OAuth2 client in one
+- [x] `server/package.json`: add `googleapis` (bundles Drive v3, Docs v1, and OAuth2 client in one
   package).
-- [ ] `server/src/googleAuth.ts` (new): `getOAuthClient()`, `getAuthUrl()` (`access_type: 'offline'`,
+- [x] `server/src/redisClient.ts` (new): pulled the shared `getRedisClient()` accessor out of
+  `redis.ts` so `googleAuth.ts` (and later the destinations registry/send log) can use Redis too,
+  instead of each module warning/connecting independently.
+- [x] `server/src/googleAuth.ts` (new): `getOAuthClient()`, `getAuthUrl()` (`access_type: 'offline'`,
   `prompt: 'consent'` — required to reliably get a `refresh_token` back), `handleCallback(code)`
   (exchanges code, stores `{ refresh_token, access_token, expiry_date }` under Redis key
   `google:oauth`), `getAuthorizedClient()` (loads tokens, returns a configured `OAuth2Client` --
-  `googleapis` auto-refreshes the access token from the refresh token as needed), `isGoogleConnected()`.
-- [ ] `server/src/index.ts`: routes `GET /auth/google` (302 to `getAuthUrl()`), `GET
-  /auth/google/callback` (exchanges + stores, 302 to `/`), `GET /api/google/status` (`{connected:
-  boolean}`).
-- [ ] `client/src/App.tsx`/`App.css`: small "Google: connected/not connected" indicator in the
-  header (fetches `/api/google/status` on load) with a "Connect Google" link (`<a
-  href="/auth/google">`) when not connected.
-- [ ] `server/.env.example`: add the three `GOOGLE_*` vars (blank, per existing convention).
-- [ ] Tests: `googleAuth.ts` unit tests with `googleapis` mocked (token storage/retrieval logic,
-  `isGoogleConnected()` true/false); a route-level test for the two `/auth/google*` redirects and
-  `/api/google/status`.
-- [ ] Run tests/lint/build. **Cannot verify the actual consent-screen round-trip from this sandbox —
-  that needs the user's real Google Cloud credentials, tested locally or on a real deploy.**
+  `googleapis` auto-refreshes the access token from the refresh token as needed, and its `tokens`
+  event is used to persist a refreshed access token back to Redis), `isGoogleConnected()`.
+- [x] `server/src/requestHandler.ts` (new): the request-routing logic pulled out of `index.ts` (which
+  starts listening as an import-time side effect, making it awkward to route-test directly) into a
+  `createRequestHandler(clientDistDir)` factory, mirroring `staticFiles.ts`'s existing pattern.
+  Routes: `GET /auth/google` (302 to `getAuthUrl()`, 500 if it throws -- e.g. env vars unset), `GET
+  /auth/google/callback` (exchanges + stores, 302 to `/`, 400 with no `code`, 500 on exchange
+  failure), `GET /api/google/status` (`{connected: boolean}`).
+- [x] `client/src/App.tsx`/`App.css`: "Connect Google" link / "Google connected" indicator in the
+  header (fetches `/api/google/status` on load).
+- [x] `server/.env.example`: added the three `GOOGLE_*` vars.
+- [x] Tests: `googleAuth.test.ts` (6 tests, `googleapis`+`redisClient` mocked -- auth URL shape,
+  connected/not-connected, callback exchange, refreshed-token persistence without clobbering the
+  refresh token); `requestHandler.test.ts` (8 tests, `googleAuth` mocked -- all the routes above plus
+  the static-file fallback); `App.test.tsx` (+2 tests for the connect link/connected indicator).
+- [x] Run tests/lint/build.
+
+_(Done: verified beyond the unit tests -- built the app, ran the real server with fake Google
+credentials, and confirmed `GET /auth/google` produces a correctly-formed real Google OAuth consent
+URL (right scopes, `access_type=offline`, `prompt=consent`) since `generateAuthUrl` is pure
+URL-building with no network call; confirmed `/api/google/status`/`/healthz` behave correctly with no
+`REDIS_URL` set; confirmed via Playwright that the built UI's "Connect Google" link renders with the
+right href. The actual consent-screen round-trip (real Google account, real `GOOGLE_CLIENT_ID`/
+`_SECRET`) still needs the user's own Google Cloud project and manual verification -- not reachable
+from this sandbox.)_
 
 ### Group B — Search + append (library + read-only endpoint)
 

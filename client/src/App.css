@@ -30,6 +30,19 @@
   color: #888;
 }
 
+.google-connect,
+.google-connected {
+  font-size: 0.75rem;
+}
+
+.google-connect {
+  color: #1f6feb;
+}
+
+.google-connected {
+  color: #888;
+}
+
 .status {
   font-size: 0.8rem;
   text-transform: uppercase;

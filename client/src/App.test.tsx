@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
 // Real Y.Doc/Y.XmlFragment (so the Tiptap Collaboration binding is exercised
@@ -33,6 +33,17 @@ vi.mock('./lib/desktopDoc', async () => {
 })
 
 describe('App', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ json: () => Promise.resolve({ connected: false }) }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('renders the desktop editor and reflects typed text', async () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
@@ -66,5 +77,21 @@ describe('App', () => {
     act(() => emitStatus('connected'))
 
     await waitFor(() => expect(editor).toHaveTextContent('abc'))
+  })
+
+  it('shows a Connect Google link when not connected', async () => {
+    render(<App />)
+    const link = await screen.findByRole('link', { name: 'Connect Google' })
+    expect(link).toHaveAttribute('href', '/auth/google')
+  })
+
+  it('shows a connected indicator once /api/google/status says so', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ json: () => Promise.resolve({ connected: true }) }),
+    )
+    render(<App />)
+    expect(await screen.findByText('Google connected')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Connect Google' })).not.toBeInTheDocument()
   })
 })

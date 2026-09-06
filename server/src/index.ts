@@ -1,9 +1,8 @@
 import { createServer } from 'node:http'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { serveStatic } from './staticFiles.js'
+import { createRequestHandler } from './requestHandler.js'
 import { handleUpgrade, waitUntilReady } from './syncServer.js'
-import { BUILD_TIMESTAMP } from './version.js'
 
 const PORT = Number(process.env.PORT ?? process.env.SYNC_SERVER_PORT ?? 8787)
 // In the deployed container this is the client build copied alongside the
@@ -15,16 +14,7 @@ const CLIENT_DIST_DIR = process.env.CLIENT_DIST_DIR
   ? resolve(process.env.CLIENT_DIST_DIR)
   : resolve(__dirname, '../../client/dist')
 
-const serveClient = serveStatic(CLIENT_DIST_DIR)
-
-const server = createServer((req, res) => {
-  if (req.url === '/healthz') {
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ status: 'ok', buildTimestamp: BUILD_TIMESTAMP }))
-    return
-  }
-  serveClient(req, res)
-})
+const server = createServer(createRequestHandler(CLIENT_DIST_DIR))
 
 server.on('upgrade', (req, socket, head) => {
   if (req.url?.startsWith('/sync')) {
