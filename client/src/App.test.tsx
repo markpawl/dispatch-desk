@@ -32,12 +32,27 @@ vi.mock('./lib/desktopDoc', async () => {
   }
 })
 
+type MaybeUser = { id: string; email: string; name: string } | null
+
+// App now gates on GET /api/me before rendering the desktop, so the fetch
+// stub has to answer that too (and per-URL, since /api/google/status has a
+// different shape). Signed in with Google not connected, unless overridden.
+function stubFetch(opts: { user?: MaybeUser; connected?: boolean } = {}) {
+  const { user = { id: 'u1', email: 'a@b.com', name: 'Ada' }, connected = false } = opts
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: string) => {
+      if (String(input).startsWith('/api/me')) {
+        return Promise.resolve({ json: () => Promise.resolve({ user }) })
+      }
+      return Promise.resolve({ json: () => Promise.resolve({ connected }) })
+    }),
+  )
+}
+
 describe('App', () => {
   beforeEach(() => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ json: () => Promise.resolve({ connected: false }) }),
-    )
+    stubFetch()
   })
 
   afterEach(() => {
@@ -46,12 +61,26 @@ describe('App', () => {
 
   it('renders the desktop editor and reflects typed text', async () => {
     render(<App />)
+    const editor = await screen.findByRole('textbox')
     expect(screen.getByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
 
-    const editor = await screen.findByRole('textbox')
     await userEvent.type(editor, 'hello')
 
     await waitFor(() => expect(editor).toHaveTextContent('hello'))
+  })
+
+  it('shows the sign-in screen (no editor) when not signed in', async () => {
+    stubFetch({ user: null })
+    render(<App />)
+    const link = await screen.findByRole('link', { name: 'Sign in with Google' })
+    expect(link).toHaveAttribute('href', '/auth/login/google')
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('renders the editor (not the sign-in screen) when signed in', async () => {
+    render(<App />)
+    expect(await screen.findByRole('textbox')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Sign in with Google' })).not.toBeInTheDocument()
   })
 
   // Guards against a real fragility: useEditor used to be called with no
@@ -82,14 +111,11 @@ describe('App', () => {
   it('shows a Connect Google link when not connected', async () => {
     render(<App />)
     const link = await screen.findByRole('link', { name: 'Connect Google' })
-    expect(link).toHaveAttribute('href', '/auth/google')
+    expect(link).toHaveAttribute('href', '/auth/connect/google')
   })
 
   it('shows a connected indicator once /api/google/status says so', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ json: () => Promise.resolve({ connected: true }) }),
-    )
+    stubFetch({ connected: true })
     render(<App />)
     expect(await screen.findByText('Google connected')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Connect Google' })).not.toBeInTheDocument()

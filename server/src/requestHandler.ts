@@ -1,10 +1,50 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { getDestination, listDestinations, saveGoogleDocDestination } from './destinations.js'
-import { getAuthUrl, handleCallback, isGoogleConnected } from './googleAuth.js'
+import {
+  EmailNotAllowedError,
+  getAuthUrl,
+  getLoginAuthUrl,
+  handleCallback,
+  handleLoginCallback,
+  isGoogleConnected,
+} from './googleAuth.js'
 import { GoogleNotConnectedError, appendTextToDoc, searchGoogleDocs } from './googleDocs.js'
 import { appendSendLogEntry, truncateForPreview } from './sendLog.js'
+import {
+  clearSessionCookie,
+  destroySession,
+  getSessionCookieToken,
+  getSessionUser,
+  serializeSessionCookie,
+} from './session.js'
 import { serveStatic } from './staticFiles.js'
+import type { User } from './users.js'
 import { BUILD_TIMESTAMP } from './version.js'
+
+// `Secure` cookies can't be set over plain HTTP, which is what local dev
+// serves; everywhere else (Railway, behind its TLS-terminating proxy) they
+// should be. Host-based rather than proto-based since local dev is the only
+// non-HTTPS case that matters here.
+function cookieSecure(req: IncomingMessage): boolean {
+  const hostname = (req.headers.host ?? '').split(':')[0]
+  return hostname !== 'localhost' && hostname !== '127.0.0.1'
+}
+
+// Group C wires this into the /api/* routes that read per-user data. It ships
+// here now (unused beyond its test) so those routes only need to add the call.
+// Writes a 401 and resolves null when there's no valid session.
+export async function requireUser(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<User | null> {
+  const user = await getSessionUser(req)
+  if (!user) {
+    res.writeHead(401, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'Not signed in' }))
+    return null
+  }
+  return user
+}
 
 // Collects and JSON-parses a request body. No framework here (see
 // staticFiles.ts's comment on the same theme), so this is the raw-Node way.
@@ -76,7 +116,93 @@ export function createRequestHandler(clientDistDir: string) {
       return
     }
 
-    if (url.pathname === '/auth/google') {
+    // --- Login: sign in to Dispatch Desk itself --------------------------
+
+    if (url.pathname === '/auth/login/google') {
+      try {
+        res.writeHead(302, { Location: getLoginAuthUrl() })
+        res.end()
+      } catch (error) {
+        console.error('[auth] failed to build Google login URL', error)
+        res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Google OAuth is not configured')
+      }
+      return
+    }
+
+    if (url.pathname === '/auth/login/google/callback') {
+      const code = url.searchParams.get('code')
+      if (!code) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Missing code')
+        return
+      }
+      handleLoginCallback(code)
+        .then(({ token }) => {
+          res.writeHead(302, {
+            Location: '/',
+            'Set-Cookie': serializeSessionCookie(token, { secure: cookieSecure(req) }),
+          })
+          res.end()
+        })
+        .catch((error: unknown) => {
+          if (error instanceof EmailNotAllowedError) {
+            res.writeHead(403, { 'Content-Type': 'text/plain' })
+            res.end('This Google account is not authorized for Dispatch Desk.')
+            return
+          }
+          console.error('[auth] Google login callback failed', error)
+          res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Google sign-in failed')
+        })
+      return
+    }
+
+    if (url.pathname === '/auth/logout') {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'text/plain' }).end('Method not allowed')
+        return
+      }
+      const token = getSessionCookieToken(req)
+      const finish = () => {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Set-Cookie': clearSessionCookie({ secure: cookieSecure(req) }),
+        })
+        res.end(JSON.stringify({ ok: true }))
+      }
+      if (!token) {
+        finish()
+        return
+      }
+      destroySession(token)
+        .then(finish)
+        .catch((error: unknown) => {
+          console.error('[auth] logout failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Logout failed' }))
+        })
+      return
+    }
+
+    if (url.pathname === '/api/me') {
+      getSessionUser(req)
+        .then((user) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              user: user ? { id: user.id, email: user.email, name: user.name } : null,
+            }),
+          )
+        })
+        .catch((error: unknown) => {
+          console.error('[auth] /api/me failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ user: null }))
+        })
+      return
+    }
+
+    // --- Connect: authorize Google as a send destination -----------------
+
+    if (url.pathname === '/auth/connect/google') {
       try {
         res.writeHead(302, { Location: getAuthUrl() })
         res.end()
@@ -89,7 +215,7 @@ export function createRequestHandler(clientDistDir: string) {
       return
     }
 
-    if (url.pathname === '/auth/google/callback') {
+    if (url.pathname === '/auth/connect/google/callback') {
       const code = url.searchParams.get('code')
       if (!code) {
         res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Missing code')

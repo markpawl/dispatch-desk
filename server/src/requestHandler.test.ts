@@ -4,10 +4,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
+const mocks = vi.hoisted(() => {
+  // A stand-in for googleAuth's real EmailNotAllowedError. requestHandler
+  // does `instanceof` on the class it imports from './googleAuth.js' -- which
+  // is this module -- so the test must throw *this* class for the check to hit.
+  class EmailNotAllowedError extends Error {}
+  return {
   getAuthUrl: vi.fn(() => 'https://accounts.google.com/mock-consent-screen'),
   handleCallback: vi.fn(async (_code: string) => undefined),
+  getLoginAuthUrl: vi.fn(() => 'https://accounts.google.com/mock-login-screen'),
+  handleLoginCallback: vi.fn(async (_code: string) => ({ token: 'sess-token-123' })),
+  EmailNotAllowedError,
   isGoogleConnected: vi.fn(async () => false),
+  getSessionUser: vi.fn(async () => null as { id: string; email: string; name: string } | null),
+  getSessionCookieToken: vi.fn(() => undefined as string | undefined),
+  destroySession: vi.fn(async (_token: string) => undefined),
   searchGoogleDocs: vi.fn(async (_query: string) => [{ id: 'doc-1', name: 'Meeting Notes' }]),
   appendTextToDoc: vi.fn(async (_docId: string, _text: string) => undefined),
   listDestinations: vi.fn(async () => [
@@ -26,8 +37,23 @@ const mocks = vi.hoisted(() => ({
     createdAt: 'now',
   })),
   appendSendLogEntry: vi.fn(async () => undefined),
+  }
+})
+vi.mock('./googleAuth.js', () => ({
+  getAuthUrl: mocks.getAuthUrl,
+  handleCallback: mocks.handleCallback,
+  getLoginAuthUrl: mocks.getLoginAuthUrl,
+  handleLoginCallback: mocks.handleLoginCallback,
+  EmailNotAllowedError: mocks.EmailNotAllowedError,
+  isGoogleConnected: mocks.isGoogleConnected,
 }))
-vi.mock('./googleAuth.js', () => mocks)
+vi.mock('./session.js', () => ({
+  getSessionUser: mocks.getSessionUser,
+  getSessionCookieToken: mocks.getSessionCookieToken,
+  destroySession: mocks.destroySession,
+  serializeSessionCookie: (token: string) => `session=${token}; HttpOnly; SameSite=Lax; Path=/`,
+  clearSessionCookie: () => 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
+}))
 // Keep the real GoogleNotConnectedError class (requestHandler.ts checks
 // `instanceof` on it) while mocking the actual search/append calls.
 vi.mock('./googleDocs.js', async (importOriginal) => ({
@@ -45,7 +71,7 @@ vi.mock('./sendLog.js', () => ({
   truncateForPreview: (text: string) => text,
 }))
 
-const { createRequestHandler } = await import('./requestHandler.js')
+const { createRequestHandler, requireUser } = await import('./requestHandler.js')
 
 describe('requestHandler', () => {
   let dir: string
@@ -78,22 +104,103 @@ describe('requestHandler', () => {
     expect(await response.json()).toMatchObject({ status: 'ok' })
   })
 
-  it('GET /auth/google redirects to the Google consent URL', async () => {
-    const response = await fetch(`${baseUrl}/auth/google`, { redirect: 'manual' })
+  describe('login (sign in to Dispatch Desk)', () => {
+    it('GET /auth/login/google redirects to the Google login consent URL', async () => {
+      const response = await fetch(`${baseUrl}/auth/login/google`, { redirect: 'manual' })
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('https://accounts.google.com/mock-login-screen')
+    })
+
+    it('GET /auth/login/google returns 500 if building the URL throws', async () => {
+      mocks.getLoginAuthUrl.mockImplementationOnce(() => {
+        throw new Error('GOOGLE_CLIENT_ID is not set')
+      })
+      const response = await fetch(`${baseUrl}/auth/login/google`, { redirect: 'manual' })
+      expect(response.status).toBe(500)
+    })
+
+    it('callback exchanges the code, sets the session cookie, and redirects home', async () => {
+      const response = await fetch(`${baseUrl}/auth/login/google/callback?code=login-code`, {
+        redirect: 'manual',
+      })
+      expect(mocks.handleLoginCallback).toHaveBeenCalledWith('login-code')
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('/')
+      expect(response.headers.get('set-cookie')).toContain('session=sess-token-123')
+    })
+
+    it('callback without a code is a 400', async () => {
+      const response = await fetch(`${baseUrl}/auth/login/google/callback`)
+      expect(response.status).toBe(400)
+      expect(mocks.handleLoginCallback).not.toHaveBeenCalled()
+    })
+
+    it('callback is a 403 when the email is not on the allowlist', async () => {
+      mocks.handleLoginCallback.mockRejectedValueOnce(new mocks.EmailNotAllowedError('x@y.com'))
+      const response = await fetch(`${baseUrl}/auth/login/google/callback?code=nope`, {
+        redirect: 'manual',
+      })
+      expect(response.status).toBe(403)
+      expect(response.headers.get('set-cookie')).toBeNull()
+    })
+
+    it('callback is a 500 on any other failure', async () => {
+      mocks.handleLoginCallback.mockRejectedValueOnce(new Error('invalid_grant'))
+      const response = await fetch(`${baseUrl}/auth/login/google/callback?code=bad`)
+      expect(response.status).toBe(500)
+    })
+  })
+
+  describe('POST /auth/logout', () => {
+    it('destroys the session named by the cookie and clears it', async () => {
+      mocks.getSessionCookieToken.mockReturnValueOnce('tok-abc')
+      const response = await fetch(`${baseUrl}/auth/logout`, { method: 'POST' })
+      expect(response.status).toBe(200)
+      expect(mocks.destroySession).toHaveBeenCalledWith('tok-abc')
+      expect(response.headers.get('set-cookie')).toContain('Max-Age=0')
+    })
+
+    it('is a no-op 200 when there is no session cookie', async () => {
+      const response = await fetch(`${baseUrl}/auth/logout`, { method: 'POST' })
+      expect(response.status).toBe(200)
+      expect(mocks.destroySession).not.toHaveBeenCalled()
+    })
+
+    it('405s on GET', async () => {
+      const response = await fetch(`${baseUrl}/auth/logout`)
+      expect(response.status).toBe(405)
+    })
+  })
+
+  describe('GET /api/me', () => {
+    it('returns the signed-in user (id/email/name only)', async () => {
+      mocks.getSessionUser.mockResolvedValueOnce({ id: 'u1', email: 'a@b.com', name: 'Ada' })
+      const response = await fetch(`${baseUrl}/api/me`)
+      expect(await response.json()).toEqual({ user: { id: 'u1', email: 'a@b.com', name: 'Ada' } })
+    })
+
+    it('returns {user: null} when not signed in', async () => {
+      const response = await fetch(`${baseUrl}/api/me`)
+      expect(await response.json()).toEqual({ user: null })
+    })
+  })
+
+  it('GET /auth/connect/google redirects to the Google consent URL', async () => {
+    const response = await fetch(`${baseUrl}/auth/connect/google`, { redirect: 'manual' })
     expect(response.status).toBe(302)
     expect(response.headers.get('location')).toBe('https://accounts.google.com/mock-consent-screen')
   })
 
-  it('GET /auth/google returns 500 if building the auth URL throws (e.g. env vars unset)', async () => {
+  it('GET /auth/connect/google returns 500 if building the auth URL throws (e.g. env vars unset)', async () => {
     mocks.getAuthUrl.mockImplementationOnce(() => {
       throw new Error('GOOGLE_CLIENT_ID is not set')
     })
-    const response = await fetch(`${baseUrl}/auth/google`, { redirect: 'manual' })
+    const response = await fetch(`${baseUrl}/auth/connect/google`, { redirect: 'manual' })
     expect(response.status).toBe(500)
   })
 
-  it('GET /auth/google/callback exchanges the code and redirects home', async () => {
-    const response = await fetch(`${baseUrl}/auth/google/callback?code=abc123`, {
+  it('GET /auth/connect/google/callback exchanges the code and redirects home', async () => {
+    const response = await fetch(`${baseUrl}/auth/connect/google/callback?code=abc123`, {
       redirect: 'manual',
     })
     expect(mocks.handleCallback).toHaveBeenCalledWith('abc123')
@@ -101,15 +208,15 @@ describe('requestHandler', () => {
     expect(response.headers.get('location')).toBe('/')
   })
 
-  it('GET /auth/google/callback without a code is a 400', async () => {
-    const response = await fetch(`${baseUrl}/auth/google/callback`)
+  it('GET /auth/connect/google/callback without a code is a 400', async () => {
+    const response = await fetch(`${baseUrl}/auth/connect/google/callback`)
     expect(response.status).toBe(400)
     expect(mocks.handleCallback).not.toHaveBeenCalled()
   })
 
-  it('GET /auth/google/callback returns 500 if the exchange fails', async () => {
+  it('GET /auth/connect/google/callback returns 500 if the exchange fails', async () => {
     mocks.handleCallback.mockRejectedValueOnce(new Error('invalid_grant'))
-    const response = await fetch(`${baseUrl}/auth/google/callback?code=bad`)
+    const response = await fetch(`${baseUrl}/auth/connect/google/callback?code=bad`)
     expect(response.status).toBe(500)
   })
 
@@ -233,5 +340,41 @@ describe('requestHandler', () => {
     const response = await fetch(`${baseUrl}/some/client/route`)
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('<h1>desktop</h1>')
+  })
+})
+
+// Ships in Group A but isn't wired into any route until Group C, so it's
+// exercised directly here rather than through a request.
+describe('requireUser', () => {
+  function fakeRes() {
+    const res = {
+      statusCode: 0,
+      body: '',
+      writeHead(status: number) {
+        this.statusCode = status
+        return this
+      },
+      end(chunk?: string) {
+        if (chunk) this.body = chunk
+      },
+    }
+    return res
+  }
+
+  afterEach(() => vi.clearAllMocks())
+
+  it('returns the user when a session resolves', async () => {
+    mocks.getSessionUser.mockResolvedValueOnce({ id: 'u1', email: 'a@b.com', name: 'Ada' })
+    const res = fakeRes()
+    const user = await requireUser({} as never, res as never)
+    expect(user).toMatchObject({ id: 'u1' })
+    expect(res.statusCode).toBe(0)
+  })
+
+  it('writes a 401 and returns null when there is no session', async () => {
+    const res = fakeRes()
+    const user = await requireUser({} as never, res as never)
+    expect(user).toBeNull()
+    expect(res.statusCode).toBe(401)
   })
 })

@@ -121,7 +121,7 @@ export function SendMenu({ editor }: SendMenuProps) {
         <div className="send-menu-popover">
           {connected === null && <div className="send-menu-status">Checking Google connection…</div>}
           {connected === false && (
-            <a className="google-connect" href="/auth/google">
+            <a className="google-connect" href="/auth/connect/google">
               Connect Google to send
             </a>
           )}

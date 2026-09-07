@@ -8,7 +8,7 @@ export interface GoogleDocSummary {
 
 export class GoogleNotConnectedError extends Error {
   constructor() {
-    super('Google is not connected -- visit /auth/google first')
+    super('Google is not connected -- visit /auth/connect/google first')
   }
 }
 

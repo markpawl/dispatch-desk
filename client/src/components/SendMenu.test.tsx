@@ -66,7 +66,7 @@ describe('SendMenu', () => {
     await userEvent.click(button)
 
     const link = await screen.findByRole('link', { name: 'Connect Google to send' })
-    expect(link).toHaveAttribute('href', '/auth/google')
+    expect(link).toHaveAttribute('href', '/auth/connect/google')
   })
 
   it('lists saved destinations and sends + deletes the selection on click', async () => {

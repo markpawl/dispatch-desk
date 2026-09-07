@@ -15,13 +15,60 @@ import { LinkFollowMenu as LinkFollowMenuExtension } from './lib/linkFollowMenu'
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
+interface Me {
+  id: string
+  email: string
+  name: string
+}
+
 // Set by the Dockerfile's build stage; unset in local dev (see vite-env.d.ts
 // and server/src/version.ts).
 const buildTimestamp = import.meta.env.VITE_BUILD_TIMESTAMP
   ? new Date(Number(import.meta.env.VITE_BUILD_TIMESTAMP) * 1000)
   : null
 
+// Gates the whole app behind sign-in. `me === undefined` while the initial
+// /api/me check is in flight (render nothing rather than flash a screen),
+// then either the sign-in screen or the desktop. The desktop's Yjs doc and
+// WebSocket aren't created until `<Desktop>` mounts, so a signed-out visitor
+// never opens a sync connection.
 function App() {
+  const [me, setMe] = useState<Me | null | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/me')
+      .then((response) => response.json())
+      .then((body: { user: Me | null }) => {
+        if (!cancelled) setMe(body.user)
+      })
+      .catch((error: unknown) => {
+        console.error('failed to check sign-in status', error)
+        if (!cancelled) setMe(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (me === undefined) return null
+  if (me === null) return <SignIn />
+  return <Desktop />
+}
+
+function SignIn() {
+  return (
+    <div className="signin">
+      <h1>Dispatch Desk</h1>
+      <p>Sign in to continue.</p>
+      <a className="signin-button" href="/auth/login/google">
+        Sign in with Google
+      </a>
+    </div>
+  )
+}
+
+function Desktop() {
   const [{ fragment, provider }] = useState(() => createDesktopDoc())
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   // null while the initial /api/google/status check is in flight, so the
@@ -101,7 +148,7 @@ function App() {
             {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
           </span>
           {googleConnected === false && (
-            <a className="google-connect" href="/auth/google">
+            <a className="google-connect" href="/auth/connect/google">
               Connect Google
             </a>
           )}
