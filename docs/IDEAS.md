@@ -66,6 +66,7 @@ _Ordered easiest to hardest to implement._
    (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
    section for the current decision.
 9. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
+10. [later] new-idea, undefined
 
 #### Addressed
 
