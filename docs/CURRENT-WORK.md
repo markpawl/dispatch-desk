@@ -130,16 +130,34 @@ _(Done: commit 0c09410 -- 10 files, +228/-108, server only. Old global keys `goo
 
 ### Group D — Add Dropbox as a second connection provider
 
-- [ ] Manual one-time setup (mirrors the Google Cloud steps): register an app in Dropbox's App
-  Console, get an App key/secret, note the redirect URI.
-- [ ] `server/src/dropboxAuth.ts` (new): Dropbox's OAuth2 flow, same shape as `googleAuth.ts`.
-- [ ] `server/src/dropboxFiles.ts` (new): equivalent of `googleDocs.ts` -- search + write. Dropbox
-  has no native "append to a file" operation the way Docs' `batchUpdate` does, so this needs its own
-  design decision (always create a new timestamped file, vs. download-modify-reupload an existing
-  one) -- to be settled when this group is actually scoped, not now.
-- [ ] `server/src/destinations.ts`: widen the `Destination` union with a `dropbox-file` variant.
-- [ ] `client/src/components/SendMenu.tsx`: handle multiple provider types in the popover.
-- [ ] Tests + manual verification, mirroring Groups A/B/C of the original Google Doc destination plan.
+Decisions settled at scoping: **text-appendable files only** (`.txt`/`.md`) via
+download-concat-reupload (`.docx`/`.xlsx` deferred to the send-helper plugin idea, `docs/IDEAS.md`
+Pending 1); official `dropbox` npm package; parallel routes mirroring the Google ones.
+
+- [~] Manual one-time setup: register an app in Dropbox's App Console (Scoped access, Full Dropbox),
+  register `…/auth/connect/dropbox/callback` (local + Railway). _User is completing this; App key +
+  secret go in `server/.env` + Railway (`DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET`)._
+- [x] `server/src/dropboxAuth.ts` (new): per-user `dropbox:oauth:<userId>` OAuth2 flow, same shape
+  as `googleAuth.ts` -- `getDropboxAuthUrl`, `handleDropboxCallback`, `isDropboxConnected`,
+  `getAuthorizedDropboxClient`. Uses the `dropbox` package's `DropboxAuth`/`Dropbox`. Offline access
+  for a (non-rotating) refresh token; no CSRF `state` yet (deferred, same as Google).
+- [x] `server/src/dropboxFiles.ts` (new): `searchDropboxFiles` (filters to `.txt`/`.md`, empty query
+  returns `[]`), `appendTextToDropboxFile` (download → prepend `\n`+text → `filesUpload` overwrite;
+  last-write-wins accepted). `DropboxNotConnectedError`.
+- [x] `server/src/destinations.ts`: `Destination` union widened with `DropboxFileDestination`
+  (`type: 'dropbox-file'`, `path`, `name`); `saveDropboxFileDestination` (upsert by path).
+- [x] `server/src/requestHandler.ts`: `SendTarget` is now provider-tagged; `parseSendBody`/
+  `resolveTarget` accept `dropboxPath`+`dropboxName`; `/api/send` dispatches on provider. New routes
+  `/auth/connect/dropbox` (+`/callback`), `/api/dropbox/status`, `/api/dropbox/search`, all behind
+  `requireUser()`. `server/.env.example`: `DROPBOX_APP_KEY`/`SECRET`/`REDIRECT_URI`.
+- [x] `client/src/components/SendMenu.tsx`: probes both `/api/{google,dropbox}/status` on open,
+  per-provider search boxes + connect links, `send()` posts the right body shape per provider.
+- [x] Tests: new `dropboxAuth.test.ts` / `dropboxFiles.test.ts`; `destinations.test.ts` +
+  dropbox/mixed-list cases; `requestHandler.test.ts` + Dropbox routes, provider dispatch, and the
+  new routes in the 401-when-signed-out `it.each`; `SendMenu.test.tsx` reworked for two providers.
+- [ ] Run tests/lint/build -- **not run locally** (Node 18; `package-lock.json` was updated via
+  `npm install --package-lock-only`). CI (`ci.yml`) runs them on push. Real Dropbox round-trip is a
+  manual check once the app secret is set.
 
 ### Group E — Connections management UI + sign-out
 
