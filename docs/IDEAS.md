@@ -17,44 +17,55 @@ landed.
 
 _Ordered easiest to hardest to implement._
 
-1. [auth] OAuth CSRF `state` parameter on both Google flows: neither `/auth/login/google` nor
+1. [future] "Send-helper" plugin structure for destination-specific processing: the app's goal is to
+   send selected text to any number and type of destination, and some destinations need real work to
+   accept a send that doesn't belong inline in the send route -- e.g. appending a paragraph to a
+   `.docx` (OOXML editing, likely a python-docx-style step in a sidecar), a row to an `.xlsx`
+   (SheetJS), format conversion, or provider-specific auth/quirks. Design a plugin interface where
+   each destination type registers its own search / resolve / write (plus any pre/post processing,
+   extra runtime deps, or sidecar process) behind a common contract, so `/api/send` stays a thin
+   dispatcher. To be designed together. Overlaps with the `[destinations]` item on reconciling
+   destinations into MCP tools -- decide whether these plugins *are* the MCP servers or sit beside
+   them. Prompted by Group D of the per-user-accounts plan shipping Dropbox as text-appendable
+   (`.txt`/`.md`) only, with `.docx`/`.xlsx` deferred to this.
+2. [auth] OAuth CSRF `state` parameter on both Google flows: neither `/auth/login/google` nor
    `/auth/connect/google` sends/verifies a `state` value, so the callbacks accept any code presented
    to them (login-CSRF / connection-fixation risk). Add a signed or Redis-stored one-time `state` to
    both, generated at the redirect and checked at the callback. Deferred out of Group A of the
    per-user-accounts plan to keep that group focused; low effort, do before the app is exposed
    beyond the developer's own use.
-2. [later] Going public, once the app is good enough to announce: two directions under
+3. [later] Going public, once the app is good enough to announce: two directions under
    consideration, possibly both -- (a) a hosted subscription product anyone can pay to sign up for,
    which needs self-service signup + billing, replacing the invite-only allowlist from
    `docs/REQUIREMENTS.md`'s Auth/Identity section; (b) an open-source release for self-hosting, which
    needs packaging/install docs but otherwise reuses the same per-user-accounts code as-is (a
    self-hoster just sets their own allowlist). Not started -- current work is the invite-only,
    developer's-own-use phase both of these build on top of.
-3. [destinations] Reconcile the Google Doc destination into the MCP Host architecture: it shipped as
+4. [destinations] Reconcile the Google Doc destination into the MCP Host architecture: it shipped as
    a direct Drive/Docs API integration in the server (see `docs/REQUIREMENTS.md`'s Destination
    Architecture section) rather than through an MCP Host/server, since standing up MCP infrastructure
    before any destination existed wasn't worth the upfront cost. Revisit once there's a second
    destination to justify building the MCP Host for real.
-4. [destinations] Harden what's live first: before adding destination features, add tests/health
+5. [destinations] Harden what's live first: before adding destination features, add tests/health
    checks around the Sync Server + Redis persistence, confirm Fly secrets are set, and consider a
    `/health` endpoint. Lower risk, but no new user-facing capability.
-5. [destinations] UI-first build order: build the right-click menu and destination sidebar
+6. [destinations] UI-first build order: build the right-click menu and destination sidebar
    (`docs/REQUIREMENTS.md`'s Key User Flows) against a stubbed/fake destination list, then swap in
    the real MCP Host once the UI is settled. Faster to see/demo, but risks rework if the MCP
    integration surfaces something the UI didn't anticipate.
-6. [destinations] Smallest end-to-end vertical slice: build the MCP Host in the server process plus
+7. [destinations] Smallest end-to-end vertical slice: build the MCP Host in the server process plus
    exactly one real destination, and wire the minimal send flow — select text → send to that
    destination → log entry + delete from desktop — fully end-to-end before building the sidebar,
-   Smart routing, or Purgatory. Superseded for now by item 3 above (the Google Doc destination
+   Smart routing, or Purgatory. Superseded for now by item 4 above (the Google Doc destination
    shipped without the MCP Host); revisit alongside it.
-7. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
+8. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
    machine via its own tunneled MCP server (mirroring `fairstream-artist-server`'s
    Cloudflare-tunnel pattern), so destinations like "a new file in a project folder" could target
    a real local directory instead of cloud storage. Deferred for now — real added complexity for
    little gain while everything else is cloud-hosted; revisit once the cloud-storage-only approach
    (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
    section for the current decision.
-5. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
+9. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
 
 #### Addressed
 
