@@ -36,14 +36,21 @@ describe('googleDocs', () => {
 
   it('throws GoogleNotConnectedError from both operations when not connected', async () => {
     mocks.getAuthorizedClient.mockResolvedValue(null)
-    await expect(searchGoogleDocs('notes')).rejects.toBeInstanceOf(GoogleNotConnectedError)
-    await expect(appendTextToDoc('doc-1', 'hi')).rejects.toBeInstanceOf(GoogleNotConnectedError)
+    await expect(searchGoogleDocs('user-1', 'notes')).rejects.toBeInstanceOf(GoogleNotConnectedError)
+    await expect(appendTextToDoc('user-1', 'doc-1', 'hi')).rejects.toBeInstanceOf(
+      GoogleNotConnectedError,
+    )
     expect(mocks.filesList).not.toHaveBeenCalled()
     expect(mocks.documentsBatchUpdate).not.toHaveBeenCalled()
   })
 
+  it('passes the per-user id through to getAuthorizedClient', async () => {
+    await searchGoogleDocs('user-42', 'x')
+    expect(mocks.getAuthorizedClient).toHaveBeenCalledWith('user-42')
+  })
+
   it('searchGoogleDocs queries for Google Docs by name and maps the response', async () => {
-    const results = await searchGoogleDocs('Meeting')
+    const results = await searchGoogleDocs('user-1', 'Meeting')
     expect(mocks.filesList).toHaveBeenCalledWith(
       expect.objectContaining({
         q: expect.stringContaining("name contains 'Meeting'"),
@@ -54,26 +61,26 @@ describe('googleDocs', () => {
   })
 
   it('searchGoogleDocs with an empty query omits the name clause entirely', async () => {
-    await searchGoogleDocs('  ')
+    await searchGoogleDocs('user-1', '  ')
     const q = mocks.filesList.mock.calls[0]?.[0]?.q
     expect(q).not.toContain('name contains')
     expect(q).toContain("mimeType='application/vnd.google-apps.document'")
   })
 
   it("searchGoogleDocs escapes a single quote in the query", async () => {
-    await searchGoogleDocs("O'Brien")
+    await searchGoogleDocs('user-1', "O'Brien")
     const q = mocks.filesList.mock.calls[0]?.[0]?.q
     expect(q).toContain("name contains 'O\\'Brien'")
   })
 
   it('searchGoogleDocs falls back to a placeholder name for an untitled result', async () => {
     mocks.filesList.mockResolvedValueOnce({ data: { files: [{ id: 'doc-2', name: null }] } })
-    const results = await searchGoogleDocs('x')
+    const results = await searchGoogleDocs('user-1', 'x')
     expect(results).toEqual([{ id: 'doc-2', name: '(untitled)' }])
   })
 
   it('appendTextToDoc inserts a newline-prefixed insertText request at the end of the doc', async () => {
-    await appendTextToDoc('doc-1', 'hello world')
+    await appendTextToDoc('user-1', 'doc-1', 'hello world')
     expect(mocks.documentsBatchUpdate).toHaveBeenCalledWith({
       documentId: 'doc-1',
       requestBody: {

@@ -22,8 +22,8 @@ describe('truncateForPreview', () => {
 })
 
 describe('appendSendLogEntry', () => {
-  it('RPUSHes a timestamped JSON entry and trims to the most recent 200', async () => {
-    await appendSendLogEntry({
+  it('RPUSHes a timestamped JSON entry under the user key and trims to the most recent 200', async () => {
+    await appendSendLogEntry('user-1', {
       destinationId: 'dest-1',
       docName: 'Meeting Notes',
       textPreview: 'hello world',
@@ -31,7 +31,7 @@ describe('appendSendLogEntry', () => {
 
     expect(rpush).toHaveBeenCalledTimes(1)
     const [key, value] = rpush.mock.calls[0] as [string, string]
-    expect(key).toBe('send-log')
+    expect(key).toBe('send-log:user-1')
     const entry = JSON.parse(value)
     expect(entry).toMatchObject({
       destinationId: 'dest-1',
@@ -40,6 +40,6 @@ describe('appendSendLogEntry', () => {
     })
     expect(entry.timestamp).toBeTruthy()
 
-    expect(ltrim).toHaveBeenCalledWith('send-log', -200, -1)
+    expect(ltrim).toHaveBeenCalledWith('send-log:user-1', -200, -1)
   })
 })

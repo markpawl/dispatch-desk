@@ -12,8 +12,8 @@ export class GoogleNotConnectedError extends Error {
   }
 }
 
-async function requireAuthorizedClient() {
-  const client = await getAuthorizedClient()
+async function requireAuthorizedClient(userId: string) {
+  const client = await getAuthorizedClient(userId)
   if (!client) throw new GoogleNotConnectedError()
   return client
 }
@@ -23,8 +23,11 @@ async function requireAuthorizedClient() {
 // content search). An empty query lists Docs unfiltered (browsing), rather
 // than sending Drive an empty `name contains ''` clause. Escapes the one
 // character (') that would otherwise break out of the q string's quoting.
-export async function searchGoogleDocs(query: string): Promise<GoogleDocSummary[]> {
-  const auth = await requireAuthorizedClient()
+export async function searchGoogleDocs(
+  userId: string,
+  query: string,
+): Promise<GoogleDocSummary[]> {
+  const auth = await requireAuthorizedClient(userId)
   const drive = google.drive({ version: 'v3', auth })
   const trimmed = query.trim()
   const nameClause = trimmed ? ` and name contains '${trimmed.replaceAll("'", "\\'")}'` : ''
@@ -43,8 +46,12 @@ export async function searchGoogleDocs(query: string): Promise<GoogleDocSummary[
 // newline before the text, so a doc's very first send gets one leading
 // blank line -- a minor, harmless quirk accepted rather than an extra
 // documents.get round-trip just to detect an empty doc and skip it.
-export async function appendTextToDoc(docId: string, text: string): Promise<void> {
-  const auth = await requireAuthorizedClient()
+export async function appendTextToDoc(
+  userId: string,
+  docId: string,
+  text: string,
+): Promise<void> {
+  const auth = await requireAuthorizedClient(userId)
   const docs = google.docs({ version: 'v1', auth })
   await docs.documents.batchUpdate({
     documentId: docId,

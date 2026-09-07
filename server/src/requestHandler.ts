@@ -30,14 +30,21 @@ function cookieSecure(req: IncomingMessage): boolean {
   return hostname !== 'localhost' && hostname !== '127.0.0.1'
 }
 
-// Group C wires this into the /api/* routes that read per-user data. It ships
-// here now (unused beyond its test) so those routes only need to add the call.
-// Writes a 401 and resolves null when there's no valid session.
+// Guards every per-user route below (the connect/google flow and the
+// /api/* data routes). Writes a 401 and resolves null when there's no valid
+// session, so callers can `if (!user) return`.
 export async function requireUser(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<User | null> {
-  const user = await getSessionUser(req)
+  let user: User | null = null
+  try {
+    user = await getSessionUser(req)
+  } catch (error) {
+    // Can't verify the session (e.g. Redis is down) -- fail closed rather
+    // than leave the request hanging on an unhandled rejection.
+    console.error('[auth] session lookup failed', error)
+  }
   if (!user) {
     res.writeHead(401, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ error: 'Not signed in' }))
@@ -89,10 +96,11 @@ function parseSendBody(body: unknown): SendRequestBody {
 }
 
 async function resolveTarget(
+  userId: string,
   body: SendRequestBody,
 ): Promise<{ docId: string; docName: string }> {
   if (body.destinationId) {
-    const destination = await getDestination(body.destinationId)
+    const destination = await getDestination(userId, body.destinationId)
     if (!destination) throw new NotFoundError(`No destination "${body.destinationId}"`)
     return { docId: destination.docId, docName: destination.docName }
   }
@@ -107,7 +115,7 @@ async function resolveTarget(
 export function createRequestHandler(clientDistDir: string) {
   const serveClient = serveStatic(clientDistDir)
 
-  return (req: IncomingMessage, res: ServerResponse) => {
+  return async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', 'http://localhost')
 
     if (url.pathname === '/healthz') {
@@ -200,9 +208,13 @@ export function createRequestHandler(clientDistDir: string) {
       return
     }
 
-    // --- Connect: authorize Google as a send destination -----------------
+    // --- Connect: authorize Google as a send destination ----------------
+    // Everything below is per-user and requires a session -- requireUser
+    // writes the 401 itself, so each route just bails on a null user.
 
     if (url.pathname === '/auth/connect/google') {
+      const user = await requireUser(req, res)
+      if (!user) return
       try {
         res.writeHead(302, { Location: getAuthUrl() })
         res.end()
@@ -216,12 +228,14 @@ export function createRequestHandler(clientDistDir: string) {
     }
 
     if (url.pathname === '/auth/connect/google/callback') {
+      const user = await requireUser(req, res)
+      if (!user) return
       const code = url.searchParams.get('code')
       if (!code) {
         res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Missing code')
         return
       }
-      handleCallback(code)
+      handleCallback(user.id, code)
         .then(() => {
           res.writeHead(302, { Location: '/' })
           res.end()
@@ -234,7 +248,9 @@ export function createRequestHandler(clientDistDir: string) {
     }
 
     if (url.pathname === '/api/google/status') {
-      isGoogleConnected()
+      const user = await requireUser(req, res)
+      if (!user) return
+      isGoogleConnected(user.id)
         .then((connected) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ connected }))
@@ -248,7 +264,9 @@ export function createRequestHandler(clientDistDir: string) {
     }
 
     if (url.pathname === '/api/google-docs/search') {
-      searchGoogleDocs(url.searchParams.get('q') ?? '')
+      const user = await requireUser(req, res)
+      if (!user) return
+      searchGoogleDocs(user.id, url.searchParams.get('q') ?? '')
         .then((docs) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ docs }))
@@ -267,7 +285,9 @@ export function createRequestHandler(clientDistDir: string) {
     }
 
     if (url.pathname === '/api/destinations') {
-      listDestinations()
+      const user = await requireUser(req, res)
+      if (!user) return
+      listDestinations(user.id)
         .then((destinations) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ destinations }))
@@ -285,13 +305,15 @@ export function createRequestHandler(clientDistDir: string) {
         res.writeHead(405, { 'Content-Type': 'text/plain' }).end('Method not allowed')
         return
       }
+      const user = await requireUser(req, res)
+      if (!user) return
       readJsonBody(req)
         .then(async (body) => {
           const parsed = parseSendBody(body)
-          const { docId, docName } = await resolveTarget(parsed)
-          await appendTextToDoc(docId, parsed.text)
-          const destination = await saveGoogleDocDestination(docId, docName)
-          await appendSendLogEntry({
+          const { docId, docName } = await resolveTarget(user.id, parsed)
+          await appendTextToDoc(user.id, docId, parsed.text)
+          const destination = await saveGoogleDocDestination(user.id, docId, docName)
+          await appendSendLogEntry(user.id, {
             destinationId: destination.id,
             docName: destination.docName,
             textPreview: truncateForPreview(parsed.text),

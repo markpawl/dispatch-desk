@@ -4,10 +4,12 @@ import { getRedisClient } from './redisClient.js'
 import { createSession } from './session.js'
 import { upsertUser } from './users.js'
 
-// Single set of *connection* tokens for the whole app (the "connect Google as
-// a send destination" flow). Group C re-keys this per user; for now it stays
-// one fixed key. Distinct from login below, which grants no Drive/Docs access.
-const GOOGLE_OAUTH_KEY = 'google:oauth'
+// Per-user *connection* tokens (the "connect Google as a send destination"
+// flow) -- one key per signed-in user. Distinct from login below, which
+// grants no Drive/Docs access and stores nothing here.
+function googleOAuthKey(userId: string): string {
+  return `google:oauth:${userId}`
+}
 
 // --- Connect (Google as a send destination) -----------------------------
 // Read access to search for a doc to send to, write access to append to one.
@@ -59,10 +61,10 @@ export function getAuthUrl(): string {
   })
 }
 
-export async function handleCallback(code: string): Promise<void> {
+export async function handleCallback(userId: string, code: string): Promise<void> {
   const client = getOAuthClient()
   const { tokens } = await client.getToken(code)
-  await storeTokens(tokens)
+  await storeTokens(userId, tokens)
 }
 
 // --- Login flow ------------------------------------------------------------
@@ -122,39 +124,40 @@ export async function handleLoginCallback(code: string): Promise<{ token: string
   return { token }
 }
 
-async function storeTokens(tokens: Credentials): Promise<void> {
+async function storeTokens(userId: string, tokens: Credentials): Promise<void> {
   const redis = getRedisClient()
   if (!redis) {
     throw new Error('[googleAuth] REDIS_URL is not set -- nowhere to store Google OAuth tokens')
   }
-  await redis.set(GOOGLE_OAUTH_KEY, JSON.stringify(tokens))
+  await redis.set(googleOAuthKey(userId), JSON.stringify(tokens))
 }
 
-async function loadTokens(): Promise<Credentials | null> {
+async function loadTokens(userId: string): Promise<Credentials | null> {
   const redis = getRedisClient()
   if (!redis) return null
-  const raw = await redis.get(GOOGLE_OAUTH_KEY)
+  const raw = await redis.get(googleOAuthKey(userId))
   if (!raw) return null
   return JSON.parse(raw) as Credentials
 }
 
-export async function isGoogleConnected(): Promise<boolean> {
-  const tokens = await loadTokens()
+export async function isGoogleConnected(userId: string): Promise<boolean> {
+  const tokens = await loadTokens(userId)
   return tokens?.refresh_token != null
 }
 
-// Returns an OAuth2Client with the stored refresh token set, or null if
-// Google hasn't been connected yet. google-auth-library refreshes the
-// access token from the refresh token automatically as needed; it also
-// fires a 'tokens' event with the refreshed credentials, which is persisted
-// back to Redis so a later cold start doesn't need to re-refresh immediately.
-export async function getAuthorizedClient(): Promise<OAuth2Client | null> {
-  const tokens = await loadTokens()
+// Returns an OAuth2Client with the given user's stored refresh token set, or
+// null if that user hasn't connected Google yet. google-auth-library
+// refreshes the access token from the refresh token automatically as needed;
+// it also fires a 'tokens' event with the refreshed credentials, which is
+// persisted back to Redis so a later cold start doesn't need to re-refresh
+// immediately.
+export async function getAuthorizedClient(userId: string): Promise<OAuth2Client | null> {
+  const tokens = await loadTokens(userId)
   if (!tokens?.refresh_token) return null
   const client = getOAuthClient()
   client.setCredentials(tokens)
   client.on('tokens', (refreshed) => {
-    storeTokens({ ...tokens, ...refreshed }).catch((error: unknown) => {
+    storeTokens(userId, { ...tokens, ...refreshed }).catch((error: unknown) => {
       console.error('[googleAuth] failed to persist refreshed tokens', error)
     })
   })

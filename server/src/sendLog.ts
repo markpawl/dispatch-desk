@@ -1,6 +1,9 @@
 import { getRedisClient } from './redisClient.js'
 
-const SEND_LOG_KEY = 'send-log'
+// One send log per signed-in user.
+function sendLogKey(userId: string): string {
+  return `send-log:${userId}`
+}
 // Unbounded growth isn't acceptable for a key meant to live in Redis
 // indefinitely -- trimmed to the most recent N sends after every write.
 const MAX_ENTRIES = 200
@@ -17,10 +20,14 @@ export function truncateForPreview(text: string): string {
   return text.length > PREVIEW_LENGTH ? `${text.slice(0, PREVIEW_LENGTH)}…` : text
 }
 
-export async function appendSendLogEntry(entry: Omit<SendLogEntry, 'timestamp'>): Promise<void> {
+export async function appendSendLogEntry(
+  userId: string,
+  entry: Omit<SendLogEntry, 'timestamp'>,
+): Promise<void> {
   const redis = getRedisClient()
   if (!redis) return
   const full: SendLogEntry = { ...entry, timestamp: new Date().toISOString() }
-  await redis.rpush(SEND_LOG_KEY, JSON.stringify(full))
-  await redis.ltrim(SEND_LOG_KEY, -MAX_ENTRIES, -1)
+  const key = sendLogKey(userId)
+  await redis.rpush(key, JSON.stringify(full))
+  await redis.ltrim(key, -MAX_ENTRIES, -1)
 }

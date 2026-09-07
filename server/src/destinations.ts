@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { getRedisClient } from './redisClient.js'
 
-const DESTINATIONS_KEY = 'destinations'
+// One saved-destinations list per signed-in user.
+function destinationsKey(userId: string): string {
+  return `destinations:${userId}`
+}
 
 export interface GoogleDocDestination {
   id: string
@@ -15,36 +18,40 @@ export interface GoogleDocDestination {
 // (see docs/IDEAS.md's Pending item 1 on reconciling this into MCP tools).
 export type Destination = GoogleDocDestination
 
-async function loadAll(): Promise<Destination[]> {
+async function loadAll(userId: string): Promise<Destination[]> {
   const redis = getRedisClient()
   if (!redis) return []
-  const raw = await redis.get(DESTINATIONS_KEY)
+  const raw = await redis.get(destinationsKey(userId))
   if (!raw) return []
   return JSON.parse(raw) as Destination[]
 }
 
-async function saveAll(destinations: Destination[]): Promise<void> {
+async function saveAll(userId: string, destinations: Destination[]): Promise<void> {
   const redis = getRedisClient()
   if (!redis) return
-  await redis.set(DESTINATIONS_KEY, JSON.stringify(destinations))
+  await redis.set(destinationsKey(userId), JSON.stringify(destinations))
 }
 
-export async function listDestinations(): Promise<Destination[]> {
-  return loadAll()
+export async function listDestinations(userId: string): Promise<Destination[]> {
+  return loadAll(userId)
 }
 
-export async function getDestination(id: string): Promise<Destination | undefined> {
-  return (await loadAll()).find((destination) => destination.id === id)
+export async function getDestination(
+  userId: string,
+  id: string,
+): Promise<Destination | undefined> {
+  return (await loadAll(userId)).find((destination) => destination.id === id)
 }
 
 // Upserts by docId -- sending to the same Google Doc twice reuses the
 // existing saved destination (so the client's "saved destinations" list
 // doesn't accumulate duplicates) rather than creating a new entry each time.
 export async function saveGoogleDocDestination(
+  userId: string,
   docId: string,
   docName: string,
 ): Promise<GoogleDocDestination> {
-  const destinations = await loadAll()
+  const destinations = await loadAll(userId)
   const existing = destinations.find((d) => d.type === 'google-doc' && d.docId === docId)
   if (existing) return existing
 
@@ -55,6 +62,6 @@ export async function saveGoogleDocDestination(
     docName,
     createdAt: new Date().toISOString(),
   }
-  await saveAll([...destinations, destination])
+  await saveAll(userId, [...destinations, destination])
   return destination
 }

@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   // A stand-in for googleAuth's real EmailNotAllowedError. requestHandler
@@ -11,34 +11,38 @@ const mocks = vi.hoisted(() => {
   class EmailNotAllowedError extends Error {}
   return {
   getAuthUrl: vi.fn(() => 'https://accounts.google.com/mock-consent-screen'),
-  handleCallback: vi.fn(async (_code: string) => undefined),
+  handleCallback: vi.fn(async (_userId: string, _code: string) => undefined),
   getLoginAuthUrl: vi.fn(() => 'https://accounts.google.com/mock-login-screen'),
   handleLoginCallback: vi.fn(async (_code: string) => ({ token: 'sess-token-123' })),
   EmailNotAllowedError,
-  isGoogleConnected: vi.fn(async () => false),
+  isGoogleConnected: vi.fn(async (_userId: string) => false),
   getSessionUser: vi.fn(async () => null as { id: string; email: string; name: string } | null),
   getSessionCookieToken: vi.fn(() => undefined as string | undefined),
   destroySession: vi.fn(async (_token: string) => undefined),
-  searchGoogleDocs: vi.fn(async (_query: string) => [{ id: 'doc-1', name: 'Meeting Notes' }]),
-  appendTextToDoc: vi.fn(async (_docId: string, _text: string) => undefined),
-  listDestinations: vi.fn(async () => [
+  searchGoogleDocs: vi.fn(async (_userId: string, _query: string) => [
+    { id: 'doc-1', name: 'Meeting Notes' },
+  ]),
+  appendTextToDoc: vi.fn(async (_userId: string, _docId: string, _text: string) => undefined),
+  listDestinations: vi.fn(async (_userId: string) => [
     { id: 'dest-1', type: 'google-doc' as const, docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
   ]),
-  getDestination: vi.fn(async (id: string) =>
+  getDestination: vi.fn(async (_userId: string, id: string) =>
     id === 'dest-1'
       ? { id: 'dest-1', type: 'google-doc' as const, docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' }
       : undefined,
   ),
-  saveGoogleDocDestination: vi.fn(async (docId: string, docName: string) => ({
+  saveGoogleDocDestination: vi.fn(async (_userId: string, docId: string, docName: string) => ({
     id: 'dest-new',
     type: 'google-doc' as const,
     docId,
     docName,
     createdAt: 'now',
   })),
-  appendSendLogEntry: vi.fn(async () => undefined),
+  appendSendLogEntry: vi.fn(async (_userId: string) => undefined),
   }
 })
+
+const SIGNED_IN_USER = { id: 'user-1', email: 'ada@example.com', name: 'Ada' }
 vi.mock('./googleAuth.js', () => ({
   getAuthUrl: mocks.getAuthUrl,
   handleCallback: mocks.handleCallback,
@@ -92,6 +96,12 @@ describe('requestHandler', () => {
   afterAll(async () => {
     await new Promise((resolveClosed) => server.close(resolveClosed))
     await rm(dir, { recursive: true, force: true })
+  })
+
+  beforeEach(() => {
+    // Signed in by default; individual tests override with
+    // mockResolvedValueOnce(null) to exercise the signed-out path.
+    mocks.getSessionUser.mockResolvedValue(SIGNED_IN_USER)
   })
 
   afterEach(() => {
@@ -180,8 +190,39 @@ describe('requestHandler', () => {
     })
 
     it('returns {user: null} when not signed in', async () => {
+      mocks.getSessionUser.mockResolvedValueOnce(null)
       const response = await fetch(`${baseUrl}/api/me`)
       expect(await response.json()).toEqual({ user: null })
+    })
+  })
+
+  describe('requires a session', () => {
+    // requireUser writes the 401 itself; each protected route just bails.
+    it.each([
+      ['GET', '/auth/connect/google'],
+      ['GET', '/auth/connect/google/callback?code=x'],
+      ['GET', '/api/google/status'],
+      ['GET', '/api/google-docs/search?q=x'],
+      ['GET', '/api/destinations'],
+      ['POST', '/api/send'],
+    ])('%s %s is 401 when signed out', async (method, path) => {
+      mocks.getSessionUser.mockResolvedValueOnce(null)
+      const response = await fetch(`${baseUrl}${path}`, {
+        method,
+        redirect: 'manual',
+        ...(method === 'POST'
+          ? { body: JSON.stringify({ text: 'x', destinationId: 'dest-1' }) }
+          : {}),
+      })
+      expect(response.status).toBe(401)
+    })
+
+    it('does not touch per-user data when signed out', async () => {
+      mocks.getSessionUser.mockResolvedValue(null)
+      await fetch(`${baseUrl}/api/destinations`)
+      await fetch(`${baseUrl}/api/google/status`)
+      expect(mocks.listDestinations).not.toHaveBeenCalled()
+      expect(mocks.isGoogleConnected).not.toHaveBeenCalled()
     })
   })
 
@@ -203,7 +244,7 @@ describe('requestHandler', () => {
     const response = await fetch(`${baseUrl}/auth/connect/google/callback?code=abc123`, {
       redirect: 'manual',
     })
-    expect(mocks.handleCallback).toHaveBeenCalledWith('abc123')
+    expect(mocks.handleCallback).toHaveBeenCalledWith('user-1', 'abc123')
     expect(response.status).toBe(302)
     expect(response.headers.get('location')).toBe('/')
   })
@@ -228,13 +269,13 @@ describe('requestHandler', () => {
 
   it('GET /api/google-docs/search returns matching docs', async () => {
     const response = await fetch(`${baseUrl}/api/google-docs/search?q=Meeting`)
-    expect(mocks.searchGoogleDocs).toHaveBeenCalledWith('Meeting')
+    expect(mocks.searchGoogleDocs).toHaveBeenCalledWith('user-1', 'Meeting')
     expect(await response.json()).toEqual({ docs: [{ id: 'doc-1', name: 'Meeting Notes' }] })
   })
 
   it('GET /api/google-docs/search defaults to an empty query when q is omitted', async () => {
     await fetch(`${baseUrl}/api/google-docs/search`)
-    expect(mocks.searchGoogleDocs).toHaveBeenCalledWith('')
+    expect(mocks.searchGoogleDocs).toHaveBeenCalledWith('user-1', '')
   })
 
   it('GET /api/google-docs/search is a 401 when Google is not connected', async () => {
@@ -265,9 +306,10 @@ describe('requestHandler', () => {
         method: 'POST',
         body: JSON.stringify({ text: 'hello world', destinationId: 'dest-1' }),
       })
-      expect(mocks.appendTextToDoc).toHaveBeenCalledWith('doc-1', 'hello world')
-      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('doc-1', 'Meeting Notes')
+      expect(mocks.appendTextToDoc).toHaveBeenCalledWith('user-1', 'doc-1', 'hello world')
+      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('user-1', 'doc-1', 'Meeting Notes')
       expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
+        'user-1',
         expect.objectContaining({ docName: 'Meeting Notes', textPreview: 'hello world' }),
       )
       const body = (await response.json()) as { ok: boolean; destination: { docId: string } }
@@ -280,8 +322,8 @@ describe('requestHandler', () => {
         method: 'POST',
         body: JSON.stringify({ text: 'hi', docId: 'doc-2', docName: 'Journal' }),
       })
-      expect(mocks.appendTextToDoc).toHaveBeenCalledWith('doc-2', 'hi')
-      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('doc-2', 'Journal')
+      expect(mocks.appendTextToDoc).toHaveBeenCalledWith('user-1', 'doc-2', 'hi')
+      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('user-1', 'doc-2', 'Journal')
       expect(response.status).toBe(200)
     })
 
@@ -343,8 +385,8 @@ describe('requestHandler', () => {
   })
 })
 
-// Ships in Group A but isn't wired into any route until Group C, so it's
-// exercised directly here rather than through a request.
+// The guard every per-user route leans on -- exercised directly here as well
+// as through the routes above.
 describe('requireUser', () => {
   function fakeRes() {
     const res = {
@@ -361,6 +403,10 @@ describe('requireUser', () => {
     return res
   }
 
+  beforeEach(() => {
+    mocks.getSessionUser.mockReset()
+  })
+
   afterEach(() => vi.clearAllMocks())
 
   it('returns the user when a session resolves', async () => {
@@ -372,6 +418,15 @@ describe('requireUser', () => {
   })
 
   it('writes a 401 and returns null when there is no session', async () => {
+    mocks.getSessionUser.mockResolvedValueOnce(null)
+    const res = fakeRes()
+    const user = await requireUser({} as never, res as never)
+    expect(user).toBeNull()
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('fails closed (401) when the session lookup throws', async () => {
+    mocks.getSessionUser.mockRejectedValueOnce(new Error('redis down'))
     const res = fakeRes()
     const user = await requireUser({} as never, res as never)
     expect(user).toBeNull()

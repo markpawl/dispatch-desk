@@ -105,19 +105,22 @@ describe('googleAuth', () => {
   })
 
   it('reports not connected before any tokens are stored', async () => {
-    expect(await isGoogleConnected()).toBe(false)
-    expect(await getAuthorizedClient()).toBeNull()
+    expect(await isGoogleConnected('user-1')).toBe(false)
+    expect(await getAuthorizedClient('user-1')).toBeNull()
   })
 
-  it('handleCallback exchanges the code and stores the resulting tokens', async () => {
-    await handleCallback('auth-code-123')
+  it('handleCallback exchanges the code and stores the resulting tokens under the user key', async () => {
+    await handleCallback('user-1', 'auth-code-123')
     expect(getToken).toHaveBeenCalledWith('auth-code-123')
-    expect(await isGoogleConnected()).toBe(true)
+    expect(store.get('google:oauth:user-1')).toBeTruthy()
+    expect(await isGoogleConnected('user-1')).toBe(true)
+    // Another user is unaffected.
+    expect(await isGoogleConnected('user-2')).toBe(false)
   })
 
   it('getAuthorizedClient sets stored credentials on a fresh OAuth2 client', async () => {
-    await handleCallback('auth-code-123')
-    const client = await getAuthorizedClient()
+    await handleCallback('user-1', 'auth-code-123')
+    const client = await getAuthorizedClient('user-1')
     expect(client).not.toBeNull()
     expect(setCredentials).toHaveBeenCalledWith(
       expect.objectContaining({ refresh_token: 'refresh-abc' }),
@@ -125,13 +128,13 @@ describe('googleAuth', () => {
   })
 
   it('persists refreshed tokens back to Redis when the client emits one', async () => {
-    await handleCallback('auth-code-123')
-    await getAuthorizedClient()
+    await handleCallback('user-1', 'auth-code-123')
+    await getAuthorizedClient('user-1')
     tokenHandler?.({ access_token: 'refreshed-access', expiry_date: 999 })
     // The 'tokens' handler persists asynchronously; give its promise a tick.
     await Promise.resolve()
     await Promise.resolve()
-    const stored = JSON.parse(store.get('google:oauth') ?? '{}')
+    const stored = JSON.parse(store.get('google:oauth:user-1') ?? '{}')
     expect(stored.access_token).toBe('refreshed-access')
     expect(stored.refresh_token).toBe('refresh-abc') // preserved, not clobbered
   })
