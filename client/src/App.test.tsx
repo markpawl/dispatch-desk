@@ -75,6 +75,9 @@ describe('App', () => {
     const link = await screen.findByRole('link', { name: 'Sign in with Google' })
     expect(link).toHaveAttribute('href', '/auth/login/google')
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    // The build timestamp shown in the app header appears here too (no
+    // VITE_BUILD_TIMESTAMP in tests, so it falls back to "dev").
+    expect(screen.getByText('dev')).toBeInTheDocument()
   })
 
   it('renders the editor (not the sign-in screen) when signed in', async () => {

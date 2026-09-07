@@ -64,6 +64,9 @@ function SignIn() {
       <a className="signin-button" href="/auth/login/google">
         Sign in with Google
       </a>
+      <span className="version" title="When this deployment was built">
+        {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
+      </span>
     </div>
   )
 }
