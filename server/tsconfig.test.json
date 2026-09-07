@@ -1,0 +1,11 @@
+{
+  // Type-checks the whole `src` tree, tests included, without emitting.
+  // Run via `npm run typecheck` (CI). The production build uses tsconfig.json,
+  // which excludes *.test.ts.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": []
+}

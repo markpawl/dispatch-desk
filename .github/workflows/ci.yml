@@ -22,6 +22,10 @@ jobs:
 
       - run: npm run lint
 
+      # Type-checks the server's tests too (the production build in
+      # `npm run build` / Docker excludes *.test.ts).
+      - run: npm run typecheck -w server
+
       - run: npm test
 
       - run: npm run build

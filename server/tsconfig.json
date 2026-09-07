@@ -16,5 +16,10 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests are not part of the production build (`npm run build` -> Docker /
+  // Railway). They're type-checked separately via tsconfig.test.json +
+  // `npm run typecheck`, run in CI -- a type error in a test must not fail
+  // the deploy.
+  "exclude": ["src/**/*.test.ts"]
 }
