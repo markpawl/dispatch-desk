@@ -5,6 +5,7 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { AccountMenu } from './components/AccountMenu'
 import { DestinationsPanel } from './components/DestinationsPanel'
 import { EditorToolbar } from './components/EditorToolbar'
 import type { LinkFollowMenuState } from './components/LinkFollowMenu'
@@ -53,7 +54,7 @@ function App() {
 
   if (me === undefined) return null
   if (me === null) return <SignIn />
-  return <Desktop />
+  return <Desktop user={me} onSignedOut={() => setMe(null)} />
 }
 
 function SignIn() {
@@ -71,12 +72,13 @@ function SignIn() {
   )
 }
 
-function Desktop() {
+function Desktop({ user, onSignedOut }: { user: Me; onSignedOut: () => void }) {
   const [{ fragment, provider }] = useState(() => createDesktopDoc())
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
-  // null while the initial /api/google/status check is in flight, so the
-  // indicator doesn't flash "not connected" before it actually knows.
+  // null while each provider's initial status check is in flight, so the
+  // account menu doesn't flash "not connected" before it actually knows.
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
+  const [dropboxConnected, setDropboxConnected] = useState<boolean | null>(null)
   // Set by LinkFollowMenuExtension on right-click/long-press over a link;
   // cleared to close the popup. `setLinkMenu`'s identity is stable across
   // renders, so passing it into the memoized `extensions` below doesn't
@@ -89,14 +91,18 @@ function Desktop() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/google/status')
-      .then((response) => response.json())
-      .then((body: { connected: boolean }) => {
-        if (!cancelled) setGoogleConnected(body.connected)
-      })
-      .catch((error: unknown) => {
-        console.error('failed to check Google connection status', error)
-      })
+    const probe = (path: string, set: (connected: boolean) => void) => {
+      fetch(path)
+        .then((response) => response.json())
+        .then((body: { connected: boolean }) => {
+          if (!cancelled) set(body.connected)
+        })
+        .catch((error: unknown) => {
+          console.error(`failed to check connection status: ${path}`, error)
+        })
+    }
+    probe('/api/google/status', setGoogleConnected)
+    probe('/api/dropbox/status', setDropboxConnected)
     return () => {
       cancelled = true
     }
@@ -150,13 +156,16 @@ function Desktop() {
           <span className="version" title="When this deployment was built">
             {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
           </span>
-          {googleConnected === false && (
-            <a className="google-connect" href="/auth/connect/google">
-              Connect Google
-            </a>
-          )}
-          {googleConnected === true && <span className="google-connected">Google connected</span>}
           <span className={`status status-${status}`}>{status}</span>
+          <AccountMenu
+            user={user}
+            googleConnected={googleConnected}
+            dropboxConnected={dropboxConnected}
+            onDisconnected={(provider) =>
+              (provider === 'google' ? setGoogleConnected : setDropboxConnected)(false)
+            }
+            onSignedOut={onSignedOut}
+          />
         </div>
       </header>
       <div className="desktop-toolbar-row">

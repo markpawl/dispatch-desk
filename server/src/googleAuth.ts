@@ -145,6 +145,21 @@ export async function isGoogleConnected(userId: string): Promise<boolean> {
   return tokens?.refresh_token != null
 }
 
+// Revokes the user's Google grant (best effort -- a failed revoke still
+// removes it locally) and forgets the stored tokens.
+export async function disconnectGoogle(userId: string): Promise<void> {
+  const client = await getAuthorizedClient(userId)
+  if (client) {
+    try {
+      await client.revokeCredentials()
+    } catch (error) {
+      console.error('[googleAuth] token revoke failed; forgetting tokens anyway', error)
+    }
+  }
+  const redis = getRedisClient()
+  if (redis) await redis.del(googleOAuthKey(userId))
+}
+
 // Returns an OAuth2Client with the given user's stored refresh token set, or
 // null if that user hasn't connected Google yet. google-auth-library
 // refreshes the access token from the refresh token automatically as needed;

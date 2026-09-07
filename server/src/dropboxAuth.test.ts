@@ -7,6 +7,9 @@ vi.mock('./redisClient.js', () => ({
     set: async (key: string, value: string) => {
       store.set(key, value)
     },
+    del: async (key: string) => {
+      store.delete(key)
+    },
   }),
 }))
 
@@ -16,7 +19,8 @@ const getAuthenticationUrl = vi.fn(
 const getAccessTokenFromCode = vi.fn(async (_redirectUri: string, _code: string) => ({
   result: { refresh_token: 'refresh-abc', access_token: 'access-abc' },
 }))
-const DropboxCtor = vi.fn().mockImplementation((options: unknown) => ({ options }))
+const authTokenRevoke = vi.fn(async () => ({ result: {} }))
+const DropboxCtor = vi.fn().mockImplementation((options: unknown) => ({ options, authTokenRevoke }))
 
 vi.mock('dropbox', () => ({
   DropboxAuth: vi.fn().mockImplementation(() => ({ getAuthenticationUrl, getAccessTokenFromCode })),
@@ -27,6 +31,7 @@ const {
   getDropboxAuthUrl,
   handleDropboxCallback,
   isDropboxConnected,
+  disconnectDropbox,
   getAuthorizedDropboxClient,
   DROPBOX_SCOPES,
 } = await import('./dropboxAuth.js')
@@ -96,5 +101,29 @@ describe('dropboxAuth', () => {
         refreshToken: 'refresh-abc',
       }),
     )
+  })
+
+  describe('disconnectDropbox', () => {
+    it('revokes the token and forgets the stored refresh token', async () => {
+      await handleDropboxCallback('user-1', 'code-xyz')
+      expect(store.has('dropbox:oauth:user-1')).toBe(true)
+
+      await disconnectDropbox('user-1')
+      expect(authTokenRevoke).toHaveBeenCalled()
+      expect(store.has('dropbox:oauth:user-1')).toBe(false)
+    })
+
+    it('still forgets the token if the revoke call fails', async () => {
+      await handleDropboxCallback('user-1', 'code-xyz')
+      authTokenRevoke.mockRejectedValueOnce(new Error('network'))
+
+      await disconnectDropbox('user-1')
+      expect(store.has('dropbox:oauth:user-1')).toBe(false)
+    })
+
+    it('is a no-op when nothing is connected', async () => {
+      await expect(disconnectDropbox('user-none')).resolves.toBeUndefined()
+      expect(authTokenRevoke).not.toHaveBeenCalled()
+    })
   })
 })

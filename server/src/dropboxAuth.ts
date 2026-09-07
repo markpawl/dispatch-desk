@@ -80,6 +80,21 @@ export async function isDropboxConnected(userId: string): Promise<boolean> {
   return (await loadTokens(userId))?.refreshToken != null
 }
 
+// Revokes the user's Dropbox grant (best effort) and forgets the stored
+// refresh token.
+export async function disconnectDropbox(userId: string): Promise<void> {
+  const client = await getAuthorizedDropboxClient(userId)
+  if (client) {
+    try {
+      await client.authTokenRevoke()
+    } catch (error) {
+      console.error('[dropboxAuth] token revoke failed; forgetting tokens anyway', error)
+    }
+  }
+  const redis = getRedisClient()
+  if (redis) await redis.del(dropboxOAuthKey(userId))
+}
+
 // A Dropbox client bound to the user's stored refresh token, or null if they
 // haven't connected. The client refreshes its own access token from the
 // refresh token as needed.

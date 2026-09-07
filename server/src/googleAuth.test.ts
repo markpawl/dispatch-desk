@@ -10,6 +10,9 @@ vi.mock('./redisClient.js', () => ({
     set: async (key: string, value: string) => {
       store.set(key, value)
     },
+    del: async (key: string) => {
+      store.delete(key)
+    },
   }),
 }))
 
@@ -29,6 +32,7 @@ const getToken = vi.fn(async (_code: string) => ({
 }))
 let tokenHandler: ((tokens: unknown) => void) | undefined
 const setCredentials = vi.fn()
+const revokeCredentials = vi.fn(async () => undefined)
 const on = vi.fn((event: string, handler: (tokens: unknown) => void) => {
   if (event === 'tokens') tokenHandler = handler
 })
@@ -40,6 +44,7 @@ vi.mock('googleapis', () => ({
         generateAuthUrl,
         getToken,
         setCredentials,
+        revokeCredentials,
         on,
       })),
     },
@@ -63,6 +68,7 @@ const {
   handleCallback,
   handleLoginCallback,
   isGoogleConnected,
+  disconnectGoogle,
   getAuthorizedClient,
   getOAuthClient,
   EmailNotAllowedError,
@@ -137,6 +143,30 @@ describe('googleAuth', () => {
     const stored = JSON.parse(store.get('google:oauth:user-1') ?? '{}')
     expect(stored.access_token).toBe('refreshed-access')
     expect(stored.refresh_token).toBe('refresh-abc') // preserved, not clobbered
+  })
+
+  describe('disconnectGoogle', () => {
+    it('revokes the grant and forgets the stored tokens', async () => {
+      await handleCallback('user-1', 'auth-code-123')
+      expect(store.has('google:oauth:user-1')).toBe(true)
+
+      await disconnectGoogle('user-1')
+      expect(revokeCredentials).toHaveBeenCalled()
+      expect(store.has('google:oauth:user-1')).toBe(false)
+    })
+
+    it('still forgets the tokens if the revoke call fails', async () => {
+      await handleCallback('user-1', 'auth-code-123')
+      revokeCredentials.mockRejectedValueOnce(new Error('network'))
+
+      await disconnectGoogle('user-1')
+      expect(store.has('google:oauth:user-1')).toBe(false)
+    })
+
+    it('is a no-op when nothing is connected', async () => {
+      await expect(disconnectGoogle('user-none')).resolves.toBeUndefined()
+      expect(revokeCredentials).not.toHaveBeenCalled()
+    })
   })
 
   describe('login flow', () => {

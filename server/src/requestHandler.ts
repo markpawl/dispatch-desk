@@ -7,6 +7,7 @@ import {
   saveGoogleDocDestination,
 } from './destinations.js'
 import {
+  disconnectDropbox,
   getDropboxAuthUrl,
   handleDropboxCallback,
   isDropboxConnected,
@@ -18,6 +19,7 @@ import {
 } from './dropboxFiles.js'
 import {
   EmailNotAllowedError,
+  disconnectGoogle,
   getAuthUrl,
   getLoginAuthUrl,
   handleCallback,
@@ -306,6 +308,26 @@ export function createRequestHandler(clientDistDir: string) {
       return
     }
 
+    if (url.pathname === '/api/google/disconnect') {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'text/plain' }).end('Method not allowed')
+        return
+      }
+      const user = await requireUser(req, res)
+      if (!user) return
+      disconnectGoogle(user.id)
+        .then(() => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true }))
+        })
+        .catch((error: unknown) => {
+          console.error('[auth] Google disconnect failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Disconnect failed' }))
+        })
+      return
+    }
+
     if (url.pathname === '/api/google-docs/search') {
       const user = await requireUser(req, res)
       if (!user) return
@@ -377,6 +399,26 @@ export function createRequestHandler(clientDistDir: string) {
           console.error('[auth] failed to check Dropbox connection status', error)
           res.writeHead(500, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ connected: false }))
+        })
+      return
+    }
+
+    if (url.pathname === '/api/dropbox/disconnect') {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'text/plain' }).end('Method not allowed')
+        return
+      }
+      const user = await requireUser(req, res)
+      if (!user) return
+      disconnectDropbox(user.id)
+        .then(() => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true }))
+        })
+        .catch((error: unknown) => {
+          console.error('[auth] Dropbox disconnect failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Disconnect failed' }))
         })
       return
     }

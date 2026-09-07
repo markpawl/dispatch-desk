@@ -34,18 +34,23 @@ vi.mock('./lib/desktopDoc', async () => {
 
 type MaybeUser = { id: string; email: string; name: string } | null
 
-// App now gates on GET /api/me before rendering the desktop, so the fetch
-// stub has to answer that too (and per-URL, since /api/google/status has a
-// different shape). Signed in with Google not connected, unless overridden.
-function stubFetch(opts: { user?: MaybeUser; connected?: boolean } = {}) {
-  const { user = { id: 'u1', email: 'a@b.com', name: 'Ada' }, connected = false } = opts
+// App gates on GET /api/me, then <Desktop> probes /api/google/status and
+// /api/dropbox/status for the account menu. Signed in, nothing connected,
+// unless overridden.
+function jsonResponse(body: unknown) {
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+}
+
+function stubFetch(opts: { user?: MaybeUser; google?: boolean; dropbox?: boolean } = {}) {
+  const { user = { id: 'u1', email: 'a@b.com', name: 'Ada' }, google = false, dropbox = false } = opts
   vi.stubGlobal(
     'fetch',
     vi.fn((input: string) => {
-      if (String(input).startsWith('/api/me')) {
-        return Promise.resolve({ json: () => Promise.resolve({ user }) })
-      }
-      return Promise.resolve({ json: () => Promise.resolve({ connected }) })
+      const url = String(input)
+      if (url.startsWith('/api/me')) return jsonResponse({ user })
+      if (url.startsWith('/api/dropbox/status')) return jsonResponse({ connected: dropbox })
+      if (url.startsWith('/api/google/status')) return jsonResponse({ connected: google })
+      return jsonResponse({})
     }),
   )
 }
@@ -111,17 +116,27 @@ describe('App', () => {
     await waitFor(() => expect(editor).toHaveTextContent('abc'))
   })
 
-  it('shows a Connect Google link when not connected', async () => {
+  it('offers Connect via the account menu when a provider is not connected', async () => {
     render(<App />)
-    const link = await screen.findByRole('link', { name: 'Connect Google' })
-    expect(link).toHaveAttribute('href', '/auth/connect/google')
+    await screen.findByRole('textbox')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ada' }))
+    const connectLinks = screen.getAllByRole('link', { name: 'Connect' })
+    expect(connectLinks.map((a) => a.getAttribute('href'))).toEqual([
+      '/auth/connect/google',
+      '/auth/connect/dropbox',
+    ])
   })
 
-  it('shows a connected indicator once /api/google/status says so', async () => {
-    stubFetch({ connected: true })
+  it('offers Disconnect via the account menu once a provider status says connected', async () => {
+    stubFetch({ google: true })
     render(<App />)
-    expect(await screen.findByText('Google connected')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Connect Google' })).not.toBeInTheDocument()
+    await screen.findByRole('textbox')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ada' }))
+    expect(await screen.findByRole('button', { name: 'Disconnect' })).toBeInTheDocument()
+    // dropbox still disconnected -> exactly one Connect link remains
+    expect(await screen.findAllByRole('link', { name: 'Connect' })).toHaveLength(1)
   })
 
   // The Link extension is configured with `openOnClick: false` (App.tsx) --
