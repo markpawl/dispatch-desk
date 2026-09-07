@@ -105,18 +105,28 @@ not executed locally; see the unchecked box.)_
 
 ### Group C — Re-key the Google connection + destinations/send-log per user
 
-- [ ] `server/src/googleAuth.ts`: `google:oauth` -> `google:oauth:<userId>` everywhere.
-- [ ] `server/src/destinations.ts`, `server/src/sendLog.ts`: `destinations`/`send-log` ->
-  `destinations:<userId>`/`send-log:<userId>`.
-- [ ] `server/src/requestHandler.ts`: `/auth/connect/google*`, `/api/google/status`,
-  `/api/google-docs/search`, `/api/destinations`, `/api/send` all call `requireUser()` first (401 if
-  not signed in) and thread `userId` through to the now-per-user functions above.
-- [ ] `client/src/App.tsx`/`SendMenu.tsx`: "Connect Google" link href `/auth/google` ->
-  `/auth/connect/google`.
-- [ ] Tests: update existing `googleAuth.test.ts`/`destinations.test.ts`/`sendLog.test.ts`/
-  `requestHandler.test.ts` for the per-user keying and the new 401-when-signed-out cases.
-- [ ] Run tests/lint/build, plus a real-Redis check (like Group A/C of the earlier plan) proving two
-  different `userId`s' destinations/tokens never collide.
+- [x] `server/src/googleAuth.ts`: `google:oauth` -> `google:oauth:<userId>`; `handleCallback`,
+  `isGoogleConnected`, `getAuthorizedClient` (+ internal `storeTokens`/`loadTokens`) take a `userId`.
+  `googleDocs.ts`'s `searchGoogleDocs`/`appendTextToDoc` take a `userId`, threaded into
+  `getAuthorizedClient`.
+- [x] `server/src/destinations.ts`, `server/src/sendLog.ts`: `destinations`/`send-log` ->
+  `destinations:<userId>`/`send-log:<userId>`; every function takes a `userId`.
+- [x] `server/src/requestHandler.ts`: handler is now `async`; `/auth/connect/google` (+`/callback`),
+  `/api/google/status`, `/api/google-docs/search`, `/api/destinations`, `/api/send` each call
+  `requireUser()` first (401 JSON when signed out) and thread `user.id` through. The connect callback
+  reads the user from the session cookie Google's redirect carries back -- no OAuth `state` param.
+  `requireUser` now fails closed (401) if the session lookup itself throws.
+- [x] `client/src/App.tsx`/`SendMenu.tsx`: "Connect Google" href -> `/auth/connect/google` --
+  _already done in Group A_ (pulled forward with the server route rename).
+- [x] Tests: `userId` args + per-user-key + cross-user isolation assertions across
+  `googleAuth`/`googleDocs`/`destinations`/`sendLog`; `requestHandler.test.ts` gains an `it.each`
+  401-when-signed-out over all 6 protected routes, a "doesn't touch per-user data when signed out"
+  check, and a fails-closed `requireUser` case; `getSessionUser` mock defaults to signed-in.
+- [ ] Run tests/lint/build -- **not run locally** (same env limitation); CI (`ci.yml`) runs them on
+  push. Real-Redis two-user collision check stays a manual step.
+
+_(Done: commit 0c09410 -- 10 files, +228/-108, server only. Old global keys `google:oauth` /
+`destinations` / `send-log` left dormant. Tests written but not executed locally.)_
 
 ### Group D — Add Dropbox as a second connection provider
 
