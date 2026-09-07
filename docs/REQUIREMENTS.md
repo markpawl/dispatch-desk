@@ -31,11 +31,20 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   toolbar area, `client/src/components/SendMenu.tsx`) rather than a right-click menu, since that
   menu doesn't exist yet. Enabled only with a non-empty selection; opens a popover listing saved
   destinations plus a Google Docs search box for picking/saving a new one. Auth is a real in-app
-  Google OAuth flow (`/auth/google`, single set of tokens in Redis — see Auth/Identity above). Both
-  halves of the default post-send action are implemented: the server writes a log entry
-  (`server/src/sendLog.ts`, a capped Redis list) and the client deletes the sent text from the
-  desktop on a successful send. This is a direct Drive/Docs API integration, not an MCP tool — see
-  the deviation noted under Destination Architecture below.
+  Google OAuth flow (`/auth/connect/google`, per-user tokens in Redis — see Auth/Identity above; a
+  separate flow from "Sign in with Google", which grants no Drive/Docs access). Both halves of the
+  default post-send action are implemented: the server writes a log entry (`server/src/sendLog.ts`,
+  a per-user capped Redis list) and the client deletes the sent text from the desktop on a
+  successful send. This is a direct Drive/Docs API integration, not an MCP tool — see the deviation
+  noted under Destination Architecture below.
+- **Second destination (a Dropbox file)**: same "Send" popover, with its own `/auth/connect/dropbox`
+  OAuth flow (per-user refresh token in Redis) and its own search box. Scoped to **text-appendable
+  files only** (`.txt`/`.md`) — since Dropbox has no native append, a send is download → prepend a
+  newline + the text → re-upload (overwrite; last-write-wins). Richer formats (`.docx`, `.xlsx`)
+  that need per-format processing are deferred to the "send-helper plugin structure" idea in
+  `docs/IDEAS.md`. Also a direct API integration (`dropbox` npm package), not an MCP tool.
+  `/api/send` dispatches on the destination's provider; `client/src/components/SendMenu.tsx` shows a
+  per-provider connect link / search box.
 
 ### Smart destination
 - Right-click → Destination → Smart invokes AI to suggest which registered destination a selection
@@ -120,7 +129,8 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   Server and the MCP Host in the same process — no reason to split them once MCP connections are
   remote-HTTP-only, so one Railway service covers all of it.
 - **Build version marker**: what's actually deployed is identifiable via a build timestamp (Unix
-  seconds), shown in the desktop UI header and in the server's `/healthz` response. The `Dockerfile`
+  seconds), shown in the desktop UI header, on the sign-in screen, and in the server's `/healthz`
+  response. The `Dockerfile`
   stamps it (`date +%s > BUILD_TIMESTAMP`) during the image build rather than deriving it from git —
   no need to smuggle `.git` into the Docker build context or thread a build-arg through the deploy
   command, and it's still a fresh, non-hand-maintained value on every image. Absent in local dev (no
@@ -152,6 +162,13 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   not being built now.
 - Each user's data -- desktop content, connected-service tokens, saved destinations, send log -- is
   private to them: everything that used to live under one global Redis key becomes per-user-keyed.
+- **Managing connections + sign-out**: a header account menu (`client/src/components/AccountMenu.tsx`,
+  opened from a button showing the signed-in name) lists each provider (Google, Dropbox) with a
+  Connect link or a Disconnect button, plus Sign out. Disconnect revokes the grant best-effort at
+  the provider then drops the stored tokens (`POST /api/{provider}/disconnect`); sign-out clears the
+  server session (`POST /auth/logout`) and returns to the sign-in screen. This replaced the earlier
+  ad-hoc "Connect Google" header link. (The separate `DestinationsPanel` -- see Destination sidebar
+  above -- is still dummy data and unrelated to this.)
 
 ## Access & Collaboration
 

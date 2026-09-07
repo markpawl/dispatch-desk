@@ -30,14 +30,21 @@ Run from the repo root (npm workspaces):
   see `client/vite.config.ts`)
 - `npm run dev:server` — Sync Server alone, via `tsx watch` (needs `server/.env`, see
   `server/.env.example`; without Redis credentials it runs with no persistence and warns)
-- `npm run build` — production build of both (client's Vite build, then the server's `tsc`)
+- `npm run build` — production build of both (client's Vite build, then the server's `tsc`). The
+  server's `tsconfig.json` **excludes `src/**/*.test.ts`** — the production build must not fail on a
+  test-file type error. Server test files are type-checked separately by `npm run typecheck -w
+  server` (`server/tsconfig.test.json`, `noEmit`).
 - `npm run start` — run the built server (serves the built client + `/sync`; needs `npm run build`
   first)
 - `npm test` — run both packages' test suites once
 - `npm run lint` — Oxlint, both packages
 
 Per-package (run from `client/` or `server/`): the same `dev`/`build`/`test`/`lint` scripts, plus
-`test:watch` in `client/`.
+`test:watch` in `client/` and `typecheck` in `server/`.
+
+**CI** (`.github/workflows/ci.yml`) runs on every push to `main` and on PRs: `npm ci`, then
+`npm run lint` → `npm run typecheck -w server` → `npm test` → `npm run build` on Node 22. It's the
+real verification when the local toolchain can't run the checks.
 
 Local dev runs the two pieces as **separate processes** (the client's Vite dev server, and the
 standalone Sync Server) since Vite's dev server doesn't serve the server's build output; production

@@ -155,14 +155,30 @@ Pending 1); official `dropbox` npm package; parallel routes mirroring the Google
 - [x] Tests: new `dropboxAuth.test.ts` / `dropboxFiles.test.ts`; `destinations.test.ts` +
   dropbox/mixed-list cases; `requestHandler.test.ts` + Dropbox routes, provider dispatch, and the
   new routes in the 401-when-signed-out `it.each`; `SendMenu.test.tsx` reworked for two providers.
-- [ ] Run tests/lint/build -- **not run locally** (Node 18; `package-lock.json` was updated via
-  `npm install --package-lock-only`). CI (`ci.yml`) runs them on push. Real Dropbox round-trip is a
-  manual check once the app secret is set.
+- [x] Run tests/lint/build -- CI (`ci.yml`) is green as of `5b14241` (lint + `typecheck -w server` +
+  test + build, Node 22). Real Dropbox round-trip is still a manual check once the app secret is set.
+
+_(Done: commit 6c232fc -- 13 files, +966/-186. New: `server/src/{dropboxAuth,dropboxFiles}.ts`
++tests, `dropbox` dep. Follow-ups: `bf9b5af` kept test files out of the prod `tsc` build after a
+test type error failed the Railway deploy; `38eb1be` fixed those test type errors.)_
 
 ### Group E — Connections management UI + sign-out
 
-- [ ] A dedicated "Connections" view listing each provider (Google, Dropbox, ...) with per-provider
-  connect/disconnect, replacing the ad-hoc header link/indicator.
-- [ ] Sign-out control in the header.
-- [ ] Tests + a Playwright pass over the connect/disconnect/sign-out flows (with `/api/*` mocked
-  where real provider auth isn't reachable from this sandbox).
+- [x] Header **account menu** (`client/src/components/AccountMenu.tsx`) opened from a button showing
+  the signed-in name: email, a row per provider (Google, Dropbox) with a Connect link or Disconnect
+  button, and Sign out. Replaces the ad-hoc "Connect Google" header link/indicator. (A full
+  Connections *panel* wasn't needed -- the menu covers connect/disconnect + sign-out.)
+- [x] `server/src/googleAuth.ts`/`dropboxAuth.ts`: `disconnectGoogle`/`disconnectDropbox` -- revoke
+  best-effort at the provider, then drop the stored tokens. `server/src/requestHandler.ts`:
+  `POST /api/{google,dropbox}/disconnect` (405 on other methods, `requireUser()`).
+- [x] `client/src/App.tsx`: `App` passes `user` + `onSignedOut` to `Desktop`; `Desktop` probes both
+  `/api/{google,dropbox}/status` and renders `<AccountMenu>`. Sign-out `POST /auth/logout` then
+  `me = null` -> `<SignIn>` (no full reload).
+- [x] Tests: `AccountMenu.test.tsx` (new); `googleAuth`/`dropboxAuth` disconnect suites;
+  `requestHandler.test.ts` disconnect routes + `it.each`; `App.test.tsx` reworked for the menu.
+  **Playwright still isn't set up** -- that pass stays a manual/deferred item.
+- [x] Run tests/lint/build -- CI green as of `5b14241`.
+
+_(Done: commits `38eb1be` (its `requestHandler.test.ts` diff carried Group E's disconnect tests
+early) + `5b14241` (the rest -- source, `AccountMenu`, `App` wiring, other tests). 10 files,
++439/-39 on the second.)_
