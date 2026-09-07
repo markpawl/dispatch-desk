@@ -80,26 +80,28 @@ written but not executed locally; see the unchecked box above.)_
 
 ### Group B — Per-user desktop (Sync Server rework)
 
-- [ ] `server/src/syncServer.ts`: replace the single global `doc`/client-set with a `Map<userId,
-  Desktop>` (`Desktop = {doc, clients, persistTimer}`; the Map holds a `Promise<Desktop>` so
-  concurrent first connections share one creation), built lazily per user on first connection and
-  loaded from Redis then. `handleUpgrade` authenticates the connecting user from their session
-  cookie (via `session.ts`) *before* completing the WebSocket upgrade -- rejects the upgrade (raw
-  `HTTP/1.1 401`) if not signed in -- then routes them into their own desktop. Desktops are kept for
-  the process lifetime (eviction is a later optimization), but a desktop's pending debounced persist
-  is flushed immediately when its last connection drops. No client-side change needed: browsers send
-  cookies on the WebSocket handshake automatically, so `desktopDoc.ts` doesn't need to know its own
-  user ID.
-- [ ] `server/src/redis.ts`: `loadDesktopState`/`persistDesktopState` take a `userId` param, keyed
-  `desktop:state:<userId>` instead of the single fixed `desktop:state`. (The old `desktop:state` key
-  is left dormant -- everyone starts fresh; carrying existing content into a user's desktop is a
-  manual one-time Redis `RENAME` if wanted.)
-- [ ] Tests: new `server/src/syncServer.test.ts` (none exists) for desktop isolation (two different
-  users' updates never cross, a same-user second connection does receive them) and the
-  upgrade-rejects-unauthenticated case. Update `redis.test.ts` for the new `userId` param.
-- [ ] Run tests/lint/build. **Playwright isn't set up in this repo** -- the two-users-two-browsers
-  check stays a manual verification (two separate authenticated sessions, each sees only its own
-  desktop content) or a later "add Playwright" task.
+- [x] `server/src/syncServer.ts`: replaced the single global `doc`/client-set with a `Map<userId,
+  Promise<Desktop>>` (`Desktop = {doc, clients, persistTimer}`; the Map holds the promise so
+  concurrent first connections share one build, and a rejected build is evicted for a clean retry),
+  built lazily per user on first connection and loaded from Redis then. `authenticateAndUpgrade`
+  resolves the session cookie (via `session.ts`) *before* completing the WebSocket upgrade -- refuses
+  it with a raw `HTTP/1.1 401` if not signed in -- then routes into that user's desktop; the `wss`
+  `connection` hop is gone (`setupConnection(ws, desktop, userId)` is called directly). Desktops are
+  kept for the process lifetime (eviction is a later optimization), but a desktop's pending debounced
+  persist is flushed immediately when its last connection drops. `waitUntilReady()` is now a no-op
+  (lazy load); `index.ts` unchanged. No client-side change.
+- [x] `server/src/redis.ts`: `loadDesktopState`/`persistDesktopState` take a `userId` param, keyed
+  `desktop:state:<userId>`. The old `desktop:state` key is left dormant -- everyone starts fresh;
+  carrying existing content into a user's desktop is a manual one-time Redis `RENAME` if wanted.
+- [x] Tests: new `server/src/syncServer.test.ts` -- upgrade refused without a session; a user's edits
+  reach their own second connection but never another user's desktop (real `ws` + `y-protocols/sync`
+  clients, `session.js`/`redis.js` mocked). `redis.test.ts` updated for the `userId` param.
+- [ ] Run tests/lint/build -- **not run locally** (same env limitation as Group A); CI (`ci.yml`)
+  runs them on push. **Playwright isn't set up in this repo** -- the two-users-two-browsers check
+  stays a manual verification or a later "add Playwright" task.
+
+_(Done: commit 256694e -- 6 files, +294/-62. New: `server/src/syncServer.test.ts`. Tests written but
+not executed locally; see the unchecked box.)_
 
 ### Group C — Re-key the Google connection + destinations/send-log per user
 
