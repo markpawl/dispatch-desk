@@ -1,9 +1,24 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { getDestination, listDestinations, saveGoogleDocDestination } from './destinations.js'
-import { getAuthUrl, handleCallback, isGoogleConnected } from './googleAuth.js'
+import {
+  NotAllowedError,
+  getAuthUrl,
+  getLoginAuthUrl,
+  handleCallback,
+  handleLoginCallback,
+  isGoogleConnected,
+} from './googleAuth.js'
 import { GoogleNotConnectedError, appendTextToDoc, searchGoogleDocs } from './googleDocs.js'
+import {
+  clearSessionCookie,
+  destroySession,
+  getSessionToken,
+  getSessionUser,
+  setSessionCookie,
+} from './session.js'
 import { appendSendLogEntry, truncateForPreview } from './sendLog.js'
 import { serveStatic } from './staticFiles.js'
+import type { User } from './users.js'
 import { BUILD_TIMESTAMP } from './version.js'
 
 // Collects and JSON-parses a request body. No framework here (see
@@ -60,6 +75,20 @@ async function resolveTarget(
   return { docId: body.docId as string, docName: body.docName as string }
 }
 
+// Guards a route behind sign-in: writes a 401 and returns null if there's no
+// signed-in user, otherwise returns the user. Not yet called by any route in
+// this file -- Group C wires it into the Google/destinations/send routes
+// once those become per-user (see docs/CURRENT-WORK.md).
+export async function requireUser(req: IncomingMessage, res: ServerResponse): Promise<User | null> {
+  const user = await getSessionUser(req)
+  if (!user) {
+    res.writeHead(401, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'Not signed in' }))
+    return null
+  }
+  return user
+}
+
 // Pulled out of index.ts so it's testable without booting the whole app --
 // index.ts itself starts listening (and waits on the Sync Server's Redis
 // load) as an import-time side effect, which a route-level test shouldn't
@@ -76,7 +105,11 @@ export function createRequestHandler(clientDistDir: string) {
       return
     }
 
-    if (url.pathname === '/auth/google') {
+    // "Connect Google" -- the broader Drive/Docs consent granted separately
+    // from login (docs/REQUIREMENTS.md's Auth/Identity section). Named
+    // /auth/connect/... to keep it visually and structurally distinct from
+    // the /auth/login/... routes below.
+    if (url.pathname === '/auth/connect/google') {
       try {
         res.writeHead(302, { Location: getAuthUrl() })
         res.end()
@@ -89,7 +122,7 @@ export function createRequestHandler(clientDistDir: string) {
       return
     }
 
-    if (url.pathname === '/auth/google/callback') {
+    if (url.pathname === '/auth/connect/google/callback') {
       const code = url.searchParams.get('code')
       if (!code) {
         res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Missing code')
@@ -103,6 +136,77 @@ export function createRequestHandler(clientDistDir: string) {
         .catch((error: unknown) => {
           console.error('[auth] Google OAuth callback failed', error)
           res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Google authorization failed')
+        })
+      return
+    }
+
+    // "Sign in with Google" -- identity only (LOGIN_SCOPES), gated by the
+    // ALLOWED_EMAILS allowlist. See docs/REQUIREMENTS.md's Auth/Identity
+    // section.
+    if (url.pathname === '/auth/login/google') {
+      try {
+        res.writeHead(302, { Location: getLoginAuthUrl() })
+        res.end()
+      } catch (error) {
+        console.error('[auth] failed to build Google login URL', error)
+        res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Google sign-in is not configured')
+      }
+      return
+    }
+
+    if (url.pathname === '/auth/login/google/callback') {
+      const code = url.searchParams.get('code')
+      if (!code) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Missing code')
+        return
+      }
+      handleLoginCallback(code)
+        .then((token) => {
+          setSessionCookie(res, token)
+          res.writeHead(302, { Location: '/' })
+          res.end()
+        })
+        .catch((error: unknown) => {
+          if (error instanceof NotAllowedError) {
+            res.writeHead(403, { 'Content-Type': 'text/plain' }).end(error.message)
+            return
+          }
+          console.error('[auth] Google login callback failed', error)
+          res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Google sign-in failed')
+        })
+      return
+    }
+
+    if (url.pathname === '/auth/logout') {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'text/plain' }).end('Method not allowed')
+        return
+      }
+      const token = getSessionToken(req)
+      ;(token ? destroySession(token) : Promise.resolve())
+        .then(() => {
+          clearSessionCookie(res)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true }))
+        })
+        .catch((error: unknown) => {
+          console.error('[auth] logout failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Logout failed' }))
+        })
+      return
+    }
+
+    if (url.pathname === '/api/me') {
+      getSessionUser(req)
+        .then((user) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ user: user && { id: user.id, email: user.email, name: user.name } }))
+        })
+        .catch((error: unknown) => {
+          console.error('[auth] failed to load session user', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ user: null }))
         })
       return
     }

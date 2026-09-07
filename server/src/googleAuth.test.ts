@@ -10,11 +10,20 @@ vi.mock('./redisClient.js', () => ({
     set: async (key: string, value: string) => {
       store.set(key, value)
     },
+    del: async (key: string) => {
+      store.delete(key)
+    },
   }),
 }))
 
+interface MockTokens {
+  refresh_token?: string
+  access_token?: string
+  expiry_date?: number
+  id_token?: string
+}
 const generateAuthUrl = vi.fn(() => 'https://accounts.google.com/o/oauth2/v2/auth?mock=1')
-const getToken = vi.fn(async (_code: string) => ({
+const getToken = vi.fn(async (_code: string): Promise<{ tokens: MockTokens }> => ({
   tokens: { refresh_token: 'refresh-abc', access_token: 'access-abc', expiry_date: 123 },
 }))
 let tokenHandler: ((tokens: unknown) => void) | undefined
@@ -22,6 +31,15 @@ const setCredentials = vi.fn()
 const on = vi.fn((event: string, handler: (tokens: unknown) => void) => {
   if (event === 'tokens') tokenHandler = handler
 })
+interface MockPayload {
+  sub?: string
+  email?: string
+  name?: string
+}
+const getPayload = vi.fn(
+  (): MockPayload => ({ sub: 'sub-1', email: 'a@example.com', name: 'A' }),
+)
+const verifyIdToken = vi.fn(async () => ({ getPayload }))
 
 vi.mock('googleapis', () => ({
   google: {
@@ -31,6 +49,7 @@ vi.mock('googleapis', () => ({
         getToken,
         setCredentials,
         on,
+        verifyIdToken,
       })),
     },
   },
@@ -42,7 +61,11 @@ const {
   isGoogleConnected,
   getAuthorizedClient,
   getOAuthClient,
+  getLoginAuthUrl,
+  handleLoginCallback,
+  NotAllowedError,
   GOOGLE_SCOPES,
+  LOGIN_SCOPES,
 } = await import('./googleAuth.js')
 
 describe('googleAuth', () => {
@@ -50,13 +73,17 @@ describe('googleAuth', () => {
     store.clear()
     process.env.GOOGLE_CLIENT_ID = 'client-id'
     process.env.GOOGLE_CLIENT_SECRET = 'client-secret'
-    process.env.GOOGLE_REDIRECT_URI = 'http://localhost:8787/auth/google/callback'
+    process.env.GOOGLE_REDIRECT_URI = 'http://localhost:8787/auth/connect/google/callback'
+    process.env.GOOGLE_LOGIN_REDIRECT_URI = 'http://localhost:8787/auth/login/google/callback'
+    process.env.ALLOWED_EMAILS = 'a@example.com'
   })
 
   afterEach(() => {
     delete process.env.GOOGLE_CLIENT_ID
     delete process.env.GOOGLE_CLIENT_SECRET
     delete process.env.GOOGLE_REDIRECT_URI
+    delete process.env.GOOGLE_LOGIN_REDIRECT_URI
+    delete process.env.ALLOWED_EMAILS
     vi.clearAllMocks()
   })
 
@@ -105,5 +132,45 @@ describe('googleAuth', () => {
     const stored = JSON.parse(store.get('google:oauth') ?? '{}')
     expect(stored.access_token).toBe('refreshed-access')
     expect(stored.refresh_token).toBe('refresh-abc') // preserved, not clobbered
+  })
+
+  describe('getLoginAuthUrl', () => {
+    it('requests the login scopes and an account picker, not offline/consent', () => {
+      const url = getLoginAuthUrl()
+      expect(url).toBe('https://accounts.google.com/o/oauth2/v2/auth?mock=1')
+      expect(generateAuthUrl).toHaveBeenCalledWith({
+        scope: LOGIN_SCOPES,
+        prompt: 'select_account',
+      })
+    })
+  })
+
+  describe('handleLoginCallback', () => {
+    it('creates a session for an allowlisted email', async () => {
+      getToken.mockResolvedValueOnce({ tokens: { id_token: 'id-token-abc' } })
+      const token = await handleLoginCallback('auth-code-123')
+      expect(token).toBeTruthy()
+      expect(verifyIdToken).toHaveBeenCalledWith({
+        idToken: 'id-token-abc',
+        audience: 'client-id',
+      })
+    })
+
+    it('rejects an email not on the allowlist', async () => {
+      process.env.ALLOWED_EMAILS = 'someone-else@example.com'
+      getToken.mockResolvedValueOnce({ tokens: { id_token: 'id-token-abc' } })
+      await expect(handleLoginCallback('auth-code-123')).rejects.toThrow(NotAllowedError)
+    })
+
+    it('throws when Google returns no id_token', async () => {
+      getToken.mockResolvedValueOnce({ tokens: {} })
+      await expect(handleLoginCallback('auth-code-123')).rejects.toThrow(/id_token/)
+    })
+
+    it('throws when the ID token payload is missing sub/email', async () => {
+      getToken.mockResolvedValueOnce({ tokens: { id_token: 'id-token-abc' } })
+      getPayload.mockReturnValueOnce({})
+      await expect(handleLoginCallback('auth-code-123')).rejects.toThrow(/payload/)
+    })
   })
 })

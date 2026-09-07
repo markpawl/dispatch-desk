@@ -15,6 +15,12 @@ import { LinkFollowMenu as LinkFollowMenuExtension } from './lib/linkFollowMenu'
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
+interface Me {
+  id: string
+  email: string
+  name: string
+}
+
 // Set by the Dockerfile's build stage; unset in local dev (see vite-env.d.ts
 // and server/src/version.ts).
 const buildTimestamp = import.meta.env.VITE_BUILD_TIMESTAMP
@@ -36,6 +42,27 @@ function App() {
   // Pending item 1) -- closed by default, same as the Destination sidebar
   // it extends (docs/REQUIREMENTS.md).
   const [destinationsPanelOpen, setDestinationsPanelOpen] = useState(false)
+  // undefined while the initial /api/me check is in flight, null once it's
+  // known nobody's signed in, otherwise the signed-in user. See
+  // docs/REQUIREMENTS.md's Auth/Identity section -- Dispatch Desk is now
+  // gated behind sign-in rather than open to anyone who loads the page.
+  const [me, setMe] = useState<Me | null | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/me')
+      .then((response) => response.json())
+      .then((body: { user: Me | null }) => {
+        if (!cancelled) setMe(body.user)
+      })
+      .catch((error: unknown) => {
+        console.error('failed to check signed-in user', error)
+        if (!cancelled) setMe(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -92,6 +119,27 @@ function App() {
     }
   }, [provider])
 
+  // `me` gates the whole app behind sign-in, but every hook above still runs
+  // unconditionally on every render (React's Rules of Hooks) -- including
+  // the ones that start the Yjs WebSocket sync connection. That's a known,
+  // temporary gap while signed out: the sync connection opens regardless of
+  // login state until Group B moves the desktop itself to be per-user (see
+  // docs/CURRENT-WORK.md).
+  if (me === undefined) {
+    return null
+  }
+
+  if (me === null) {
+    return (
+      <div className="signin-screen">
+        <h1>Dispatch Desk</h1>
+        <a className="signin-button" href="/auth/login/google">
+          Sign in with Google
+        </a>
+      </div>
+    )
+  }
+
   return (
     <div className="desktop">
       <header className="desktop-header">
@@ -101,7 +149,7 @@ function App() {
             {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
           </span>
           {googleConnected === false && (
-            <a className="google-connect" href="/auth/google">
+            <a className="google-connect" href="/auth/connect/google">
               Connect Google
             </a>
           )}

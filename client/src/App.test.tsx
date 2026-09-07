@@ -32,12 +32,31 @@ vi.mock('./lib/desktopDoc', async () => {
   }
 })
 
+const signedInUser = { id: 'sub-1', email: 'a@example.com', name: 'A' }
+
+// Routes by URL so existing tests (which assume a signed-in user and Google
+// not yet connected) keep working while still exercising the real /api/me
+// gating logic -- overridden per-test below for the sign-in-screen cases.
+function stubFetch(overrides: Record<string, unknown> = {}) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url === '/api/me') {
+        return Promise.resolve({
+          json: () => Promise.resolve({ user: 'me' in overrides ? overrides.me : signedInUser }),
+        })
+      }
+      return Promise.resolve({
+        json: () =>
+          Promise.resolve({ connected: 'googleConnected' in overrides ? overrides.googleConnected : false }),
+      })
+    }),
+  )
+}
+
 describe('App', () => {
   beforeEach(() => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ json: () => Promise.resolve({ connected: false }) }),
-    )
+    stubFetch()
   })
 
   afterEach(() => {
@@ -46,7 +65,7 @@ describe('App', () => {
 
   it('renders the desktop editor and reflects typed text', async () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
 
     const editor = await screen.findByRole('textbox')
     await userEvent.type(editor, 'hello')
@@ -82,17 +101,30 @@ describe('App', () => {
   it('shows a Connect Google link when not connected', async () => {
     render(<App />)
     const link = await screen.findByRole('link', { name: 'Connect Google' })
-    expect(link).toHaveAttribute('href', '/auth/google')
+    expect(link).toHaveAttribute('href', '/auth/connect/google')
   })
 
   it('shows a connected indicator once /api/google/status says so', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ json: () => Promise.resolve({ connected: true }) }),
-    )
+    stubFetch({ googleConnected: true })
     render(<App />)
     expect(await screen.findByText('Google connected')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Connect Google' })).not.toBeInTheDocument()
+  })
+
+  describe('sign-in gating', () => {
+    it('shows a sign-in screen when signed out', async () => {
+      stubFetch({ me: null })
+      render(<App />)
+      const link = await screen.findByRole('link', { name: 'Sign in with Google' })
+      expect(link).toHaveAttribute('href', '/auth/login/google')
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    })
+
+    it('shows the desktop editor once /api/me reports a signed-in user', async () => {
+      render(<App />)
+      expect(await screen.findByRole('textbox')).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Sign in with Google' })).not.toBeInTheDocument()
+    })
   })
 
   // The Link extension is configured with `openOnClick: false` (App.tsx) --

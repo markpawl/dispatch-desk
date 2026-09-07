@@ -43,35 +43,48 @@ usable from the same Google Cloud OAuth client (just requesting different scopes
 
 ### Group A — Accounts, sessions, login/logout, gate the app behind sign-in
 
-- [ ] `server/src/users.ts` (new): Redis-backed user records keyed by Google's `sub` (stable per
+- [x] `server/src/users.ts` (new): Redis-backed user records keyed by Google's `sub` (stable per
   Google account, unlike email) -- `user:<sub>` -> `{id, email, name, createdAt}`.
-- [ ] `server/src/session.ts` (new): opaque server-side sessions, not JWT -- `createSession(userId)`
+- [x] `server/src/session.ts` (new): opaque server-side sessions, not JWT -- `createSession(userId)`
   (random token, `session:<token>` -> `userId` in Redis with a TTL), `getSessionUser(req)` (reads the
   `session` cookie, loads the session then the user record), `destroySession(token)`. Cookie:
   `httpOnly; sameSite=lax` (+ `secure` when not localhost).
-- [ ] `server/src/googleAuth.ts`: add `getLoginAuthUrl()` (scope `openid email profile`) alongside
+- [x] `server/src/googleAuth.ts`: add `getLoginAuthUrl()` (scope `openid email profile`) alongside
   the existing `getAuthUrl()` (Drive/Docs scopes, now conceptually "connect", not "login"); add
   `handleLoginCallback(code)` (exchanges code, decodes the ID token or calls Google's userinfo
   endpoint for `{sub, email, name}`, checks `email` against `ALLOWED_EMAILS`, upserts the user via
   `users.ts`, creates a session).
-- [ ] `server/src/requestHandler.ts`: rename `/auth/google` -> `/auth/connect/google` (+`/callback`);
+- [x] `server/src/requestHandler.ts`: rename `/auth/google` -> `/auth/connect/google` (+`/callback`);
   add `GET /auth/login/google` (302 to `getLoginAuthUrl()`), `GET /auth/login/google/callback`
   (exchanges, 403 with a clear message if the email isn't allowlisted, else sets the session cookie
   and 302s to `/`), `POST /auth/logout` (destroys the session, clears the cookie), `GET /api/me`
   (`{user: {id, email, name}} | {user: null}`). A `requireUser(req, res)` helper other routes will
   call in Group C.
-- [ ] `client/src/App.tsx`: on load, check `/api/me`; if not signed in, render a minimal sign-in
+- [x] `client/src/App.tsx`: on load, check `/api/me`; if not signed in, render a minimal sign-in
   screen ("Sign in with Google" linking to `/auth/login/google`) instead of the editor; if signed in,
   render the editor as today. **Known temporary gap, resolved in Group B**: until the Sync Server
   itself is per-user, a signed-in user still sees the one old global desktop -- login is real, the
   desktop's privacy isn't yet.
-- [ ] `server/.env.example`: add `ALLOWED_EMAILS` (comma-separated).
-- [ ] Tests: `users.ts`/`session.ts` unit tests (Redis mocked, matching `destinations.test.ts`'s
+- [x] `server/.env.example`: add `ALLOWED_EMAILS` (comma-separated).
+- [x] Tests: `users.ts`/`session.ts` unit tests (Redis mocked, matching `destinations.test.ts`'s
   style); `requestHandler.test.ts` additions for the new/renamed routes (login redirect, callback
   incl. the not-allowlisted 403, logout, `/api/me`); a client test for the signed-out sign-in screen
   vs. signed-in editor.
-- [ ] Run tests/lint/build. **Cannot verify the real Google login round-trip from this sandbox** (no
+- [x] Run tests/lint/build. **Cannot verify the real Google login round-trip from this sandbox** (no
   network access to Google) -- same limitation as the original Google Doc destination work.
+
+  _(Done: `server/src/users.ts`, `server/src/session.ts` (new); `server/src/googleAuth.ts` extended
+  with `LOGIN_SCOPES`, `getLoginAuthUrl()`, `NotAllowedError`, `handleLoginCallback()` (and a second
+  OAuth2 client/`GOOGLE_LOGIN_REDIRECT_URI`, since login and connect are separate OAuth round-trips
+  that can't share one redirect_uri); `server/src/requestHandler.ts` renamed the connect routes and
+  added `/auth/login/google(+/callback)`, `POST /auth/logout`, `GET /api/me`, and an (as-yet-unused)
+  `requireUser()`; `client/src/App.tsx`/`App.css` gate the app behind `/api/me` with a sign-in
+  screen, and `App.tsx`/`SendMenu.tsx`'s "Connect Google" links updated to `/auth/connect/google`;
+  `server/.env.example` documents `ALLOWED_EMAILS` and the two redirect URIs. Tests: new
+  `users.test.ts` (3), `session.test.ts` (8); extended `googleAuth.test.ts` (+6),
+  `requestHandler.test.ts` (+13), `App.test.tsx` (+2 sign-in-gating, +1 fetch-stub rework). Full
+  suite: 76 server+client tests, lint, and build all pass. Real Google login round-trip not
+  verified -- no network access to Google from this sandbox.)_
 
 ### Group B — Per-user desktop (Sync Server rework)
 

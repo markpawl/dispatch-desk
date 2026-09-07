@@ -1,10 +1,13 @@
 import { google } from 'googleapis'
 import type { Credentials, OAuth2Client } from 'google-auth-library'
 import { getRedisClient } from './redisClient.js'
+import { createSession } from './session.js'
+import { upsertUser } from './users.js'
 
 // Single set of tokens for the whole app -- Dispatch Desk is personal-use,
 // single-user (see docs/REQUIREMENTS.md's Auth/Identity section), so there's
-// no per-user token storage, just one fixed key.
+// no per-user token storage, just one fixed key. (Group C re-keys this per
+// user; see docs/CURRENT-WORK.md.)
 const GOOGLE_OAUTH_KEY = 'google:oauth'
 
 // Read access to search for a doc to send to, write access to append to one.
@@ -14,6 +17,12 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/documents',
   'https://www.googleapis.com/auth/drive.metadata.readonly',
 ]
+
+// Kept separate from GOOGLE_SCOPES -- signing in only needs to know who you
+// are, not access your Drive. That broader consent is granted later, as its
+// own step, when actually connecting Google as a destination. See
+// docs/REQUIREMENTS.md's Auth/Identity section.
+export const LOGIN_SCOPES = ['openid', 'email', 'profile']
 
 function requireEnv(name: string): string {
   const value = process.env[name]
@@ -26,6 +35,18 @@ export function getOAuthClient(): OAuth2Client {
     requireEnv('GOOGLE_CLIENT_ID'),
     requireEnv('GOOGLE_CLIENT_SECRET'),
     requireEnv('GOOGLE_REDIRECT_URI'),
+  )
+}
+
+// Login uses its own redirect URI/callback route, distinct from the "connect
+// Google" flow above -- they're separate OAuth round-trips (different scopes,
+// different callback handlers) even though both go through the same Google
+// app, so they can't share one redirect_uri.
+function getLoginOAuthClient(): OAuth2Client {
+  return new google.auth.OAuth2(
+    requireEnv('GOOGLE_CLIENT_ID'),
+    requireEnv('GOOGLE_CLIENT_SECRET'),
+    requireEnv('GOOGLE_LOGIN_REDIRECT_URI'),
   )
 }
 
@@ -46,6 +67,60 @@ export async function handleCallback(code: string): Promise<void> {
   const client = getOAuthClient()
   const { tokens } = await client.getToken(code)
   await storeTokens(tokens)
+}
+
+export function getLoginAuthUrl(): string {
+  const client = getLoginOAuthClient()
+  return client.generateAuthUrl({
+    scope: LOGIN_SCOPES,
+    // Lets someone signed into multiple Google accounts pick, rather than
+    // silently reusing whichever one is currently active in their browser.
+    prompt: 'select_account',
+  })
+}
+
+export class NotAllowedError extends Error {
+  constructor(email: string) {
+    super(`${email} is not on the allowlist`)
+  }
+}
+
+// Invite-only access control (docs/REQUIREMENTS.md's Auth/Identity section):
+// an operator-controlled allowlist rather than open self-service signup.
+function isEmailAllowed(email: string): boolean {
+  const allowed = (process.env.ALLOWED_EMAILS ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+  return allowed.includes(email.toLowerCase())
+}
+
+// Exchanges the login callback's code for an ID token, verifies it, checks
+// the allowlist, upserts the user record, and creates a session -- returning
+// just the session token for the caller to set as a cookie.
+export async function handleLoginCallback(code: string): Promise<string> {
+  const client = getLoginOAuthClient()
+  const { tokens } = await client.getToken(code)
+  if (!tokens.id_token) {
+    throw new Error('[googleAuth] No id_token returned from Google')
+  }
+  const ticket = await client.verifyIdToken({
+    idToken: tokens.id_token,
+    audience: requireEnv('GOOGLE_CLIENT_ID'),
+  })
+  const payload = ticket.getPayload()
+  if (!payload?.sub || !payload.email) {
+    throw new Error('[googleAuth] Incomplete ID token payload from Google')
+  }
+  if (!isEmailAllowed(payload.email)) {
+    throw new NotAllowedError(payload.email)
+  }
+  const user = await upsertUser({
+    id: payload.sub,
+    email: payload.email,
+    name: payload.name ?? payload.email,
+  })
+  return createSession(user.id)
 }
 
 async function storeTokens(tokens: Credentials): Promise<void> {
