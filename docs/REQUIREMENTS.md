@@ -11,8 +11,11 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - The idea: one single place to capture notes, ideas, thoughts, and reminders as they occur, with
   that information later migrating out to wherever it actually belongs. The desktop is a staging
   area, not a permanent home for any of it.
-- Scope: a single shared desktop — one document, the same one no matter how many browsers have it
-  open. No multiple/named desktops for now.
+- Scope: one desktop per signed-in user — the same document no matter how many browsers/devices
+  that person has it open on, but private to them, not shared with other people. (Originally decided
+  as a single desktop shared by everyone, back when the app had no accounts at all -- reversed once
+  the app grew real per-user login and per-user destination connections; see Auth/Identity below. No
+  *multiple* desktops per user, though -- still one document per person, not several named ones.)
 
 ## Key User Flows
 
@@ -93,6 +96,9 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   server just to ship one destination was judged not worth the upfront cost before any destination
   existed at all. See `docs/IDEAS.md`'s Pending section for reconciling this back into the MCP
   architecture above once there's more than one destination to justify it.
+- **Connections are per-user** (see Auth/Identity): each signed-in person maintains their own
+  separate set of connected services (their own Google tokens, their own Dropbox tokens, etc.) and
+  their own saved destinations -- none of it shared with other people using the same deployment.
 
 ## Hosting & Server Stack
 
@@ -124,24 +130,45 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ## Auth / Identity
 
-- No authentication or identity system, for now — Dispatch Desk is for personal use only: a single
-  user, no accounts, no login.
+- **Decision reversed**: Dispatch Desk now has real accounts and login -- superseding the original
+  "single user, no accounts" decision. Trigger: destinations/connections (Google, Dropbox, etc.) are
+  personal to each person using the app, not shared, which only makes sense with real per-user
+  identity; and each person gets their own private desktop (see Core Problem/Goal's Scope bullet).
+- **Sign-in mechanism: "Sign in with Google"**, using a minimal identity scope (who you are) kept
+  separate from the broader Drive/Docs consent granted later when actually connecting Google as a
+  destination -- avoids storing passwords, and keeps "log into Dispatch Desk" and "connect Google for
+  Drive access" as the two distinct steps they conceptually are, even though both go through Google.
+- **Access control: invite-only**, via an allowlist of permitted emails the operator controls (an env
+  var) -- not open self-service signup. Fits where the app is today (the developer's own personal
+  use) and generalizes cleanly to either of the two ways this might eventually go public (see
+  `docs/IDEAS.md`'s Pending section): a self-hosted open-source release just has each operator set
+  their own allowlist to whoever they want using their instance; a hosted subscription product would
+  swap this allowlist step out for real self-service signup + billing -- a separate, larger effort,
+  not being built now.
+- Each user's data -- desktop content, connected-service tokens, saved destinations, send log -- is
+  private to them: everything that used to live under one global Redis key becomes per-user-keyed.
 
 ## Access & Collaboration
 
 - The app must be reachable and usable from any standards-compliant web browser — no native app,
   browser extension, or local install required.
-- Opening the app in a new browser instance (a different browser, tab, or device) must show the
-  desktop's current contents, not an empty or stale local copy.
-- An edit made in one open instance must propagate live to every other open instance — the way a
-  collaborative editor (e.g. Google Docs) behaves — not only on next load/refresh.
+- Opening the app in a new browser instance (a different browser, tab, or device) **while signed in
+  as the same person** must show that person's desktop's current contents, not an empty or stale
+  local copy.
+- An edit made in one open instance must propagate live to every other open instance of the *same
+  person's* desktop — the way a collaborative editor (e.g. Google Docs) behaves — not only on next
+  load/refresh. (Collaboration here means multi-device for one person, not multiple different people
+  sharing one document -- see Auth/Identity's per-user desktop decision.)
 
 ## Real-Time Sync Architecture
 
 - The desktop's document model is a CRDT (e.g. Yjs), so concurrent edits from multiple open
   browsers merge automatically without server-side lock-stepping.
 - Changes propagate over a WebSocket transport: a sync/relay server broadcasts each small update to
-  every other connected client.
+  every other connected client of the *same user's* desktop -- one room per user, not one global
+  room. The WebSocket connection authenticates the connecting user (from their session) before
+  routing them to their own room; it's how "per-user desktop" (Auth/Identity) is actually enforced,
+  not just a client-side convention.
 - "Delete on send" is implemented as removing that range from the shared CRDT doc — the deletion
   then propagates to every open browser the same way any other edit would.
 - The sync server must persist the desktop's content to a real datastore so it survives restarts
