@@ -17,19 +17,31 @@ landed.
 
 _Ordered easiest to hardest to implement._
 
-1. [destinations] Harden what's live first: before adding destination features, add tests/health
+1. [later] Going public, once the app is good enough to announce: two directions under
+   consideration, possibly both -- (a) a hosted subscription product anyone can pay to sign up for,
+   which needs self-service signup + billing, replacing the invite-only allowlist from
+   `docs/REQUIREMENTS.md`'s Auth/Identity section; (b) an open-source release for self-hosting, which
+   needs packaging/install docs but otherwise reuses the same per-user-accounts code as-is (a
+   self-hoster just sets their own allowlist). Not started -- current work is the invite-only,
+   developer's-own-use phase both of these build on top of.
+2. [destinations] Reconcile the Google Doc destination into the MCP Host architecture: it shipped as
+   a direct Drive/Docs API integration in the server (see `docs/REQUIREMENTS.md`'s Destination
+   Architecture section) rather than through an MCP Host/server, since standing up MCP infrastructure
+   before any destination existed wasn't worth the upfront cost. Revisit once there's a second
+   destination to justify building the MCP Host for real.
+3. [destinations] Harden what's live first: before adding destination features, add tests/health
    checks around the Sync Server + Redis persistence, confirm Fly secrets are set, and consider a
    `/health` endpoint. Lower risk, but no new user-facing capability.
-2. [destinations] UI-first build order: build the right-click menu and destination sidebar
+4. [destinations] UI-first build order: build the right-click menu and destination sidebar
    (`docs/REQUIREMENTS.md`'s Key User Flows) against a stubbed/fake destination list, then swap in
    the real MCP Host once the UI is settled. Faster to see/demo, but risks rework if the MCP
    integration surfaces something the UI didn't anticipate.
-3. [destinations] Smallest end-to-end vertical slice (recommended): build the MCP Host in the
-   server process plus exactly one real destination, and wire the minimal send flow — select text
-   → send to that destination → log entry + delete from desktop — fully end-to-end before building
-   the sidebar, Smart routing, or Purgatory. De-risks the whole Destination Architecture
-   (`docs/REQUIREMENTS.md`) before investing in UI polish.
-4. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
+5. [destinations] Smallest end-to-end vertical slice: build the MCP Host in the server process plus
+   exactly one real destination, and wire the minimal send flow — select text → send to that
+   destination → log entry + delete from desktop — fully end-to-end before building the sidebar,
+   Smart routing, or Purgatory. Superseded for now by item 2 above (the Google Doc destination
+   shipped without the MCP Host); revisit alongside it.
+6. [later] Local-machine MCP server for local filesystem destinations: reach down to the user's own
    machine via its own tunneled MCP server (mirroring `fairstream-artist-server`'s
    Cloudflare-tunnel pattern), so destinations like "a new file in a project folder" could target
    a real local directory instead of cloud storage. Deferred for now — real added complexity for
@@ -37,9 +49,6 @@ _Ordered easiest to hardest to implement._
    (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
    section for the current decision.
 5. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
-
-2. Client - Header - version number: A sequential version number that increments each time the app is deployed should appear to the right of the app title in the client. The font size should be smaller than that of the app title and the font color should be a medium grey,
-3. client - right sidebar - channels and destinations: add a currently permanent sidebar on the right of the page that a list of channels and a list of destinations. Channels when configured create new destinations. destinations have all the info needed for the app to send the selected data somewhere. 
 
 #### Addressed
 
@@ -52,9 +61,20 @@ _Ordered easiest to hardest to implement._
    that broadcasts small updates to every connected client. _(Decided — see docs/REQUIREMENTS.md's
    Real-Time Sync Architecture and Hosting & Server Stack sections: Node.js/TypeScript, Redis, a
    single Fly.io app.)_
-3. [ops] App version number: show what's actually deployed, visible both in the desktop UI header
-   and via the server's `/healthz` endpoint. _(Landed as a build timestamp rather than a git commit
-   identifier — see docs/REQUIREMENTS.md's Hosting & Server Stack section. `Dockerfile` stamps
-   `BUILD_TIMESTAMP` (Unix seconds) during the image build; `client/src/vite-env.d.ts` +
-   `App.tsx` and `server/src/version.ts` + `index.ts`'s `/healthz` read it, falling back to
-   `"dev"`/`null` in local dev.)_
+3. Client - Header - version number: originally proposed as a sequential version number
+   incrementing each deploy, next to the app title, smaller font and medium grey. _(Landed as a
+   build timestamp instead of a literal sequential counter, per follow-up discussion — see
+   docs/REQUIREMENTS.md's Hosting & Server Stack section. Also exposed via the server's `/healthz`
+   endpoint. `Dockerfile` stamps `BUILD_TIMESTAMP` (Unix seconds) during the image build;
+   `client/src/vite-env.d.ts` + `App.tsx` (`.version` -- 0.75rem, `#888`, matching the smaller/grey
+   ask) and `server/src/version.ts` + `index.ts`'s `/healthz` read it, falling back to `"dev"`/`null`
+   in local dev.)_
+4. [destinations] Right-side area with two lists — channels and destinations: a togglable panel on
+   the right edge of the screen showing two separate lists, **channels** (the available destination
+   types/mechanisms) and **destinations** (the configured instances created from them), rather than
+   the single destinations list `docs/REQUIREMENTS.md` previously described. _(Landed the panel
+   itself with dummy/hardcoded data for both lists — see `docs/REQUIREMENTS.md`'s Destination
+   sidebar section and `client/src/components/DestinationsPanel.tsx`, toggled from a toolbar
+   button. Still open: the actual "create a destination by picking a channel and supplying its
+   config" flow — that's real functionality, not layout, and falls out of the still-pending MCP
+   Host work above (items 1 and 3).)_

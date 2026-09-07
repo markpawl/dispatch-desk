@@ -1,0 +1,15 @@
+# Railway config for dispatch-desk. See https://docs.railway.com/reference/config-as-code
+#
+# Railway auto-detects the root Dockerfile and builds from it directly -- this file only pins that
+# explicitly and covers deploy-time behavior (healthcheck, restarts) that fly.toml's
+# [http_service] block used to.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

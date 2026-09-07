@@ -9,3 +9,6 @@ dist/
 # Written by the Dockerfile's build stage (see BUILD_TIMESTAMP/version.ts);
 # only ever generated inside the image, never meant to be committed.
 BUILD_TIMESTAMP
+# A local redis-server's snapshot file, dropped into whatever directory it
+# was launched from -- harmless but not meant to be committed.
+dump.rdb

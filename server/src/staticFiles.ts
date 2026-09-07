@@ -1,6 +1,6 @@
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { extname, join, normalize } from 'node:path'
+import { extname, join, normalize, sep } from 'node:path'
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -32,7 +32,19 @@ export function serveStatic(rootDir: string) {
       return
     }
 
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[extname(path)] ?? 'application/octet-stream' })
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[extname(path)] ?? 'application/octet-stream',
+      // No caching directives at all leaves browsers free to apply their own
+      // heuristics on a plain refresh (not a hard refresh) and keep serving
+      // an old index.html/bundle straight from disk cache after a redeploy
+      // -- which is exactly what index.html must never do, since it's what
+      // points at whichever hashed JS/CSS bundle is actually current.
+      // Vite's hashed asset filenames (dist/assets/*) are the opposite case:
+      // safe to cache forever, since any content change gets a new filename.
+      'Cache-Control': path.includes(`${sep}assets${sep}`)
+        ? 'public, max-age=31536000, immutable'
+        : 'no-cache',
+    })
     createReadStream(path).pipe(res)
   }
 }
