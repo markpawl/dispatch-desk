@@ -36,8 +36,10 @@ _Ordered easiest to hardest to implement._
    little gain while everything else is cloud-hosted; revisit once the cloud-storage-only approach
    (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
    section for the current decision.
+5. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
 
 2. Client - Header - version number: A sequential version number that increments each time the app is deployed should appear to the right of the app title in the client. The font size should be smaller than that of the app title and the font color should be a medium grey,
+3. client - right sidebar - channels and destinations: add a currently permanent sidebar on the right of the page that a list of channels and a list of destinations. Channels when configured create new destinations. destinations have all the info needed for the app to send the selected data somewhere. 
 
 #### Addressed
 
