@@ -1,9 +1,10 @@
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 
-// The single shared desktop (see docs/REQUIREMENTS.md: one document, no
-// multiple/named desktops for now) -- "desktop" is a fixed room name, not a
-// per-user or per-session identifier.
+// A fixed name in the WebSocket URL. The Sync Server ignores it -- it routes
+// each connection to a desktop by the authenticated user behind the session
+// cookie (see server/src/syncServer.ts), not by anything the client sends --
+// so this stays constant; there are no multiple/named desktops per user.
 const ROOM_NAME = 'desktop'
 
 // Same origin in production (the Sync Server serves the built client and the
@@ -21,8 +22,9 @@ export interface DesktopDoc {
 }
 
 // Creates a fresh Yjs doc wired to the Sync Server over WebSocket. Call once
-// per app instance (see main.tsx) -- every open browser gets its own replica
-// that the provider keeps merged with everyone else's via the CRDT.
+// per app instance (see main.tsx) -- each of the signed-in user's open
+// browsers gets its own replica that the provider keeps merged with that
+// user's other replicas via the CRDT (one private desktop per user).
 //
 // The desktop's content lives in a Y.XmlFragment (rich text -- see
 // docs/REQUIREMENTS.md's Editor section), which Tiptap's Collaboration

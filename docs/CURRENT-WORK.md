@@ -81,18 +81,25 @@ written but not executed locally; see the unchecked box above.)_
 ### Group B — Per-user desktop (Sync Server rework)
 
 - [ ] `server/src/syncServer.ts`: replace the single global `doc`/client-set with a `Map<userId,
-  Room>` (`Room = {doc, clients, persistTimer}`), created lazily per user on first connection and
+  Desktop>` (`Desktop = {doc, clients, persistTimer}`; the Map holds a `Promise<Desktop>` so
+  concurrent first connections share one creation), built lazily per user on first connection and
   loaded from Redis then. `handleUpgrade` authenticates the connecting user from their session
-  cookie (via `session.ts`) *before* completing the WebSocket upgrade -- rejects the upgrade if not
-  signed in -- then routes them into their own room. No client-side change needed: browsers send
+  cookie (via `session.ts`) *before* completing the WebSocket upgrade -- rejects the upgrade (raw
+  `HTTP/1.1 401`) if not signed in -- then routes them into their own desktop. Desktops are kept for
+  the process lifetime (eviction is a later optimization), but a desktop's pending debounced persist
+  is flushed immediately when its last connection drops. No client-side change needed: browsers send
   cookies on the WebSocket handshake automatically, so `desktopDoc.ts` doesn't need to know its own
   user ID.
 - [ ] `server/src/redis.ts`: `loadDesktopState`/`persistDesktopState` take a `userId` param, keyed
-  `desktop:state:<userId>` instead of the single fixed `desktop:state`.
-- [ ] Tests: `syncServer` tests (new, or extended if none exist yet -- check) for room isolation
-  (two different users' updates never cross rooms) and the upgrade-rejects-unauthenticated case.
-- [ ] Run tests/lint/build, plus a two-users-two-browsers Playwright pass (two separate authenticated
-  sessions) confirming each sees only their own desktop content, not the other's.
+  `desktop:state:<userId>` instead of the single fixed `desktop:state`. (The old `desktop:state` key
+  is left dormant -- everyone starts fresh; carrying existing content into a user's desktop is a
+  manual one-time Redis `RENAME` if wanted.)
+- [ ] Tests: new `server/src/syncServer.test.ts` (none exists) for desktop isolation (two different
+  users' updates never cross, a same-user second connection does receive them) and the
+  upgrade-rejects-unauthenticated case. Update `redis.test.ts` for the new `userId` param.
+- [ ] Run tests/lint/build. **Playwright isn't set up in this repo** -- the two-users-two-browsers
+  check stays a manual verification (two separate authenticated sessions, each sees only its own
+  desktop content) or a later "add Playwright" task.
 
 ### Group C — Re-key the Google connection + destinations/send-log per user
 
