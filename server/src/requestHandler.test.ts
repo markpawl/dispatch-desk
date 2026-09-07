@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
-  // A stand-in for googleAuth's real EmailNotAllowedError. requestHandler
-  // does `instanceof` on the class it imports from './googleAuth.js' -- which
-  // is this module -- so the test must throw *this* class for the check to hit.
+  // Stand-ins for the real error classes requestHandler does `instanceof` on:
+  // the check compares against the class it imports from the mocked module, so
+  // tests must throw *these*.
   class EmailNotAllowedError extends Error {}
+  class DropboxNotConnectedError extends Error {}
   return {
   getAuthUrl: vi.fn(() => 'https://accounts.google.com/mock-consent-screen'),
   handleCallback: vi.fn(async (_userId: string, _code: string) => undefined),
@@ -38,7 +39,24 @@ const mocks = vi.hoisted(() => {
     docName,
     createdAt: 'now',
   })),
+  saveDropboxFileDestination: vi.fn(async (_userId: string, path: string, name: string) => ({
+    id: 'dest-dbx',
+    type: 'dropbox-file' as const,
+    path,
+    name,
+    createdAt: 'now',
+  })),
   appendSendLogEntry: vi.fn(async (_userId: string) => undefined),
+  DropboxNotConnectedError,
+  getDropboxAuthUrl: vi.fn(async () => 'https://www.dropbox.com/mock-consent-screen'),
+  handleDropboxCallback: vi.fn(async (_userId: string, _code: string) => undefined),
+  isDropboxConnected: vi.fn(async (_userId: string) => false),
+  searchDropboxFiles: vi.fn(async (_userId: string, _query: string) => [
+    { path: '/notes.txt', name: 'notes.txt' },
+  ]),
+  appendTextToDropboxFile: vi.fn(
+    async (_userId: string, _path: string, _text: string) => undefined,
+  ),
   }
 })
 
@@ -69,6 +87,17 @@ vi.mock('./destinations.js', () => ({
   listDestinations: mocks.listDestinations,
   getDestination: mocks.getDestination,
   saveGoogleDocDestination: mocks.saveGoogleDocDestination,
+  saveDropboxFileDestination: mocks.saveDropboxFileDestination,
+}))
+vi.mock('./dropboxAuth.js', () => ({
+  getDropboxAuthUrl: mocks.getDropboxAuthUrl,
+  handleDropboxCallback: mocks.handleDropboxCallback,
+  isDropboxConnected: mocks.isDropboxConnected,
+}))
+vi.mock('./dropboxFiles.js', () => ({
+  DropboxNotConnectedError: mocks.DropboxNotConnectedError,
+  searchDropboxFiles: mocks.searchDropboxFiles,
+  appendTextToDropboxFile: mocks.appendTextToDropboxFile,
 }))
 vi.mock('./sendLog.js', () => ({
   appendSendLogEntry: mocks.appendSendLogEntry,
@@ -203,6 +232,10 @@ describe('requestHandler', () => {
       ['GET', '/auth/connect/google/callback?code=x'],
       ['GET', '/api/google/status'],
       ['GET', '/api/google-docs/search?q=x'],
+      ['GET', '/auth/connect/dropbox'],
+      ['GET', '/auth/connect/dropbox/callback?code=x'],
+      ['GET', '/api/dropbox/status'],
+      ['GET', '/api/dropbox/search?q=x'],
       ['GET', '/api/destinations'],
       ['POST', '/api/send'],
     ])('%s %s is 401 when signed out', async (method, path) => {
@@ -291,6 +324,53 @@ describe('requestHandler', () => {
     expect(response.status).toBe(500)
   })
 
+  describe('Dropbox connect + search', () => {
+    it('GET /auth/connect/dropbox redirects to the Dropbox consent URL', async () => {
+      const response = await fetch(`${baseUrl}/auth/connect/dropbox`, { redirect: 'manual' })
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('https://www.dropbox.com/mock-consent-screen')
+    })
+
+    it('GET /auth/connect/dropbox is 500 if building the URL rejects', async () => {
+      mocks.getDropboxAuthUrl.mockRejectedValueOnce(new Error('DROPBOX_APP_KEY is not set'))
+      const response = await fetch(`${baseUrl}/auth/connect/dropbox`, { redirect: 'manual' })
+      expect(response.status).toBe(500)
+    })
+
+    it('GET /auth/connect/dropbox/callback exchanges the code and redirects home', async () => {
+      const response = await fetch(`${baseUrl}/auth/connect/dropbox/callback?code=dbx-code`, {
+        redirect: 'manual',
+      })
+      expect(mocks.handleDropboxCallback).toHaveBeenCalledWith('user-1', 'dbx-code')
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toBe('/')
+    })
+
+    it('GET /auth/connect/dropbox/callback without a code is a 400', async () => {
+      const response = await fetch(`${baseUrl}/auth/connect/dropbox/callback`)
+      expect(response.status).toBe(400)
+      expect(mocks.handleDropboxCallback).not.toHaveBeenCalled()
+    })
+
+    it('GET /api/dropbox/status reflects isDropboxConnected()', async () => {
+      mocks.isDropboxConnected.mockResolvedValueOnce(true)
+      const response = await fetch(`${baseUrl}/api/dropbox/status`)
+      expect(await response.json()).toEqual({ connected: true })
+    })
+
+    it('GET /api/dropbox/search returns matching files', async () => {
+      const response = await fetch(`${baseUrl}/api/dropbox/search?q=notes`)
+      expect(mocks.searchDropboxFiles).toHaveBeenCalledWith('user-1', 'notes')
+      expect(await response.json()).toEqual({ files: [{ path: '/notes.txt', name: 'notes.txt' }] })
+    })
+
+    it('GET /api/dropbox/search is a 401 when Dropbox is not connected', async () => {
+      mocks.searchDropboxFiles.mockRejectedValueOnce(new mocks.DropboxNotConnectedError())
+      const response = await fetch(`${baseUrl}/api/dropbox/search?q=x`)
+      expect(response.status).toBe(401)
+    })
+  })
+
   it('GET /api/destinations lists saved destinations', async () => {
     const response = await fetch(`${baseUrl}/api/destinations`)
     expect(await response.json()).toEqual({
@@ -324,6 +404,41 @@ describe('requestHandler', () => {
       })
       expect(mocks.appendTextToDoc).toHaveBeenCalledWith('user-1', 'doc-2', 'hi')
       expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('user-1', 'doc-2', 'Journal')
+      expect(response.status).toBe(200)
+    })
+
+    it('sends to an ad-hoc Dropbox file, appending and saving it', async () => {
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'note', dropboxPath: '/journal.md', dropboxName: 'journal.md' }),
+      })
+      expect(mocks.appendTextToDropboxFile).toHaveBeenCalledWith('user-1', '/journal.md', 'note')
+      expect(mocks.saveDropboxFileDestination).toHaveBeenCalledWith(
+        'user-1',
+        '/journal.md',
+        'journal.md',
+      )
+      expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ docName: 'journal.md', textPreview: 'note' }),
+      )
+      expect(mocks.appendTextToDoc).not.toHaveBeenCalled()
+      expect(response.status).toBe(200)
+    })
+
+    it('sends to a saved dropbox-file destinationId', async () => {
+      mocks.getDestination.mockResolvedValueOnce({
+        id: 'dest-1',
+        type: 'dropbox-file' as const,
+        path: '/saved.txt',
+        name: 'saved.txt',
+        createdAt: 'now',
+      })
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'x', destinationId: 'dest-1' }),
+      })
+      expect(mocks.appendTextToDropboxFile).toHaveBeenCalledWith('user-1', '/saved.txt', 'x')
       expect(response.status).toBe(200)
     })
 

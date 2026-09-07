@@ -10,9 +10,8 @@ vi.mock('./redisClient.js', () => ({
   }),
 }))
 
-const { listDestinations, getDestination, saveGoogleDocDestination } = await import(
-  './destinations.js'
-)
+const { listDestinations, getDestination, saveGoogleDocDestination, saveDropboxFileDestination } =
+  await import('./destinations.js')
 
 describe('destinations', () => {
   beforeEach(() => {
@@ -61,5 +60,20 @@ describe('destinations', () => {
 
     expect(await listDestinations('user-1')).toEqual([mine])
     expect(await getDestination('user-2', mine.id)).toBeUndefined()
+  })
+
+  it('saves a dropbox-file destination and upserts it by path', async () => {
+    const first = await saveDropboxFileDestination('user-1', '/notes.txt', 'notes.txt')
+    expect(first).toMatchObject({ type: 'dropbox-file', path: '/notes.txt', name: 'notes.txt' })
+    const second = await saveDropboxFileDestination('user-1', '/notes.txt', 'renamed.txt')
+    expect(second).toEqual(first)
+    expect(await listDestinations('user-1')).toHaveLength(1)
+  })
+
+  it('google-doc and dropbox-file destinations coexist in one list', async () => {
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
+    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md')
+    expect(await listDestinations('user-1')).toEqual([doc, file])
+    expect(await getDestination('user-1', file.id)).toEqual(file)
   })
 })

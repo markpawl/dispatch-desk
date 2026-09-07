@@ -31,6 +31,68 @@ function selectAll() {
   })
 }
 
+interface StubOptions {
+  google?: boolean
+  dropbox?: boolean
+  destinations?: unknown[]
+  googleDocs?: { id: string; name: string }[]
+  dropboxFiles?: { path: string; name: string }[]
+  send?: { ok: boolean; body?: unknown }
+  onSend?: (init?: RequestInit) => void
+}
+
+// SendMenu now probes both /api/google/status and /api/dropbox/status on open
+// (plus /api/destinations), and searches each connected provider separately.
+function stubFetch(options: StubOptions = {}) {
+  const {
+    google = false,
+    dropbox = false,
+    destinations = [],
+    googleDocs = [],
+    dropboxFiles = [],
+    send = { ok: true },
+    onSend,
+  } = options
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/google/status') {
+        return Promise.resolve({ json: () => Promise.resolve({ connected: google }) })
+      }
+      if (url === '/api/dropbox/status') {
+        return Promise.resolve({ json: () => Promise.resolve({ connected: dropbox }) })
+      }
+      if (url === '/api/destinations') {
+        return Promise.resolve({ json: () => Promise.resolve({ destinations }) })
+      }
+      if (url.startsWith('/api/google-docs/search')) {
+        return Promise.resolve({ json: () => Promise.resolve({ docs: googleDocs }) })
+      }
+      if (url.startsWith('/api/dropbox/search')) {
+        return Promise.resolve({ json: () => Promise.resolve({ files: dropboxFiles }) })
+      }
+      if (url === '/api/send') {
+        onSend?.(init)
+        return Promise.resolve({
+          ok: send.ok,
+          json: () => Promise.resolve(send.body ?? { ok: send.ok, destination: {} }),
+        })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }),
+  )
+}
+
+async function openMenu() {
+  render(<Harness />)
+  const button = await screen.findByRole('button', { name: 'Send' })
+  selectAll()
+  await waitFor(() => expect(button).toBeEnabled())
+  await userEvent.click(button)
+  return button
+}
+
 describe('SendMenu', () => {
   beforeEach(() => {
     capturedEditor = null
@@ -49,97 +111,53 @@ describe('SendMenu', () => {
     await waitFor(() => expect(button).toBeEnabled())
   })
 
-  it('shows a Connect Google prompt when not connected', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (url === '/api/google/status') {
-          return Promise.resolve({ json: () => Promise.resolve({ connected: false }) })
-        }
-        return Promise.resolve({ json: () => Promise.resolve({ destinations: [] }) })
-      }),
-    )
-    render(<Harness />)
-    const button = await screen.findByRole('button', { name: 'Send' })
-    selectAll()
-    await waitFor(() => expect(button).toBeEnabled())
-    await userEvent.click(button)
+  it('shows connect prompts for both providers when neither is connected', async () => {
+    stubFetch({ google: false, dropbox: false })
+    await openMenu()
 
-    const link = await screen.findByRole('link', { name: 'Connect Google to send' })
-    expect(link).toHaveAttribute('href', '/auth/connect/google')
+    expect(await screen.findByRole('link', { name: 'Connect Google to send' })).toHaveAttribute(
+      'href',
+      '/auth/connect/google',
+    )
+    expect(screen.getByRole('link', { name: 'Connect Dropbox to send' })).toHaveAttribute(
+      'href',
+      '/auth/connect/dropbox',
+    )
   })
 
   it('lists saved destinations and sends + deletes the selection on click', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string, init?: RequestInit) => {
-        if (url === '/api/google/status') {
-          return Promise.resolve({ json: () => Promise.resolve({ connected: true }) })
-        }
-        if (url === '/api/destinations') {
-          return Promise.resolve({
-            json: () =>
-              Promise.resolve({
-                destinations: [
-                  { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
-                ],
-              }),
-          })
-        }
-        if (url === '/api/send') {
-          const body = JSON.parse(init?.body as string)
-          expect(body).toEqual({ text: 'hello world', docId: 'doc-1', docName: 'Meeting Notes' })
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ ok: true, destination: {} }),
-          })
-        }
-        throw new Error(`unexpected fetch: ${url}`)
-      }),
-    )
-    render(<Harness />)
-    const button = await screen.findByRole('button', { name: 'Send' })
-    selectAll()
-    await waitFor(() => expect(button).toBeEnabled())
-    await userEvent.click(button)
+    const sent: RequestInit[] = []
+    stubFetch({
+      google: true,
+      destinations: [
+        { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+      ],
+      onSend: (init) => sent.push(init as RequestInit),
+    })
+    await openMenu()
 
     const destinationButton = await screen.findByRole('button', { name: 'Meeting Notes' })
     await userEvent.click(destinationButton)
 
-    // Sent text is deleted from the desktop (the Send flow's default
-    // post-send action) and the popover closes.
+    expect(JSON.parse(sent[0].body as string)).toEqual({
+      text: 'hello world',
+      docId: 'doc-1',
+      docName: 'Meeting Notes',
+    })
     await waitFor(() => expect(capturedEditor?.getText()).toBe(''))
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Meeting Notes' })).not.toBeInTheDocument(),
     )
   })
 
-  it('searches Google Docs and can send to a new (unsaved) doc', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (url === '/api/google/status') {
-          return Promise.resolve({ json: () => Promise.resolve({ connected: true }) })
-        }
-        if (url === '/api/destinations') {
-          return Promise.resolve({ json: () => Promise.resolve({ destinations: [] }) })
-        }
-        if (url.startsWith('/api/google-docs/search')) {
-          return Promise.resolve({
-            json: () => Promise.resolve({ docs: [{ id: 'doc-2', name: 'Journal' }] }),
-          })
-        }
-        if (url === '/api/send') {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, destination: {} }) })
-        }
-        throw new Error(`unexpected fetch: ${url}`)
-      }),
-    )
-    render(<Harness />)
-    const button = await screen.findByRole('button', { name: 'Send' })
-    selectAll()
-    await waitFor(() => expect(button).toBeEnabled())
-    await userEvent.click(button)
+  it('searches Google Docs and sends to a new (unsaved) doc', async () => {
+    const sent: RequestInit[] = []
+    stubFetch({
+      google: true,
+      googleDocs: [{ id: 'doc-2', name: 'Journal' }],
+      onSend: (init) => sent.push(init as RequestInit),
+    })
+    await openMenu()
 
     const search = await screen.findByPlaceholderText('Search Google Docs…')
     await userEvent.type(search, 'Jour')
@@ -147,40 +165,46 @@ describe('SendMenu', () => {
     const result = await screen.findByRole('button', { name: 'Journal' })
     await userEvent.click(result)
 
+    expect(JSON.parse(sent[0].body as string)).toEqual({
+      text: 'hello world',
+      docId: 'doc-2',
+      docName: 'Journal',
+    })
+    await waitFor(() => expect(capturedEditor?.getText()).toBe(''))
+  })
+
+  it('searches Dropbox and sends to a file (dropboxPath/dropboxName body)', async () => {
+    const sent: RequestInit[] = []
+    stubFetch({
+      dropbox: true,
+      dropboxFiles: [{ path: '/journal.md', name: 'journal.md' }],
+      onSend: (init) => sent.push(init as RequestInit),
+    })
+    await openMenu()
+
+    const search = await screen.findByPlaceholderText('Search Dropbox files…')
+    await userEvent.type(search, 'jour')
+
+    const result = await screen.findByRole('button', { name: 'journal.md' })
+    await userEvent.click(result)
+
+    expect(JSON.parse(sent[0].body as string)).toEqual({
+      text: 'hello world',
+      dropboxPath: '/journal.md',
+      dropboxName: 'journal.md',
+    })
     await waitFor(() => expect(capturedEditor?.getText()).toBe(''))
   })
 
   it('shows an error and keeps the selection when the send fails', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (url === '/api/google/status') {
-          return Promise.resolve({ json: () => Promise.resolve({ connected: true }) })
-        }
-        if (url === '/api/destinations') {
-          return Promise.resolve({
-            json: () =>
-              Promise.resolve({
-                destinations: [
-                  { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
-                ],
-              }),
-          })
-        }
-        if (url === '/api/send') {
-          return Promise.resolve({
-            ok: false,
-            json: () => Promise.resolve({ error: 'Google is not connected' }),
-          })
-        }
-        throw new Error(`unexpected fetch: ${url}`)
-      }),
-    )
-    render(<Harness />)
-    const button = await screen.findByRole('button', { name: 'Send' })
-    selectAll()
-    await waitFor(() => expect(button).toBeEnabled())
-    await userEvent.click(button)
+    stubFetch({
+      google: true,
+      destinations: [
+        { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+      ],
+      send: { ok: false, body: { error: 'Google is not connected' } },
+    })
+    await openMenu()
 
     const destinationButton = await screen.findByRole('button', { name: 'Meeting Notes' })
     await userEvent.click(destinationButton)

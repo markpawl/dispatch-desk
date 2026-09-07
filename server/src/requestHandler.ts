@@ -1,5 +1,21 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { getDestination, listDestinations, saveGoogleDocDestination } from './destinations.js'
+import {
+  type Destination,
+  getDestination,
+  listDestinations,
+  saveDropboxFileDestination,
+  saveGoogleDocDestination,
+} from './destinations.js'
+import {
+  getDropboxAuthUrl,
+  handleDropboxCallback,
+  isDropboxConnected,
+} from './dropboxAuth.js'
+import {
+  DropboxNotConnectedError,
+  appendTextToDropboxFile,
+  searchDropboxFiles,
+} from './dropboxFiles.js'
 import {
   EmailNotAllowedError,
   getAuthUrl,
@@ -73,16 +89,27 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
 class BadRequestError extends Error {}
 class NotFoundError extends Error {}
 
+// A resolved send target, tagged by provider. An existing `destinationId`
+// resolves to one of these; an ad-hoc send carries one provider's fields.
+type SendTarget =
+  | { provider: 'google-doc'; docId: string; docName: string }
+  | { provider: 'dropbox-file'; path: string; name: string }
+
 interface SendRequestBody {
   text: string
   destinationId?: string
   docId?: string
   docName?: string
+  dropboxPath?: string
+  dropboxName?: string
 }
 
 function parseSendBody(body: unknown): SendRequestBody {
   if (typeof body !== 'object' || body === null) throw new BadRequestError('Expected a JSON body')
-  const { text, destinationId, docId, docName } = body as Record<string, unknown>
+  const { text, destinationId, docId, docName, dropboxPath, dropboxName } = body as Record<
+    string,
+    unknown
+  >
   if (typeof text !== 'string' || text.trim() === '') {
     throw new BadRequestError('"text" is required')
   }
@@ -92,20 +119,36 @@ function parseSendBody(body: unknown): SendRequestBody {
   if (typeof docId === 'string' && docId && typeof docName === 'string' && docName) {
     return { text, docId, docName }
   }
-  throw new BadRequestError('Either "destinationId" or both "docId" and "docName" are required')
+  if (
+    typeof dropboxPath === 'string' &&
+    dropboxPath &&
+    typeof dropboxName === 'string' &&
+    dropboxName
+  ) {
+    return { text, dropboxPath, dropboxName }
+  }
+  throw new BadRequestError(
+    'Provide "destinationId", or "docId"+"docName", or "dropboxPath"+"dropboxName"',
+  )
 }
 
-async function resolveTarget(
-  userId: string,
-  body: SendRequestBody,
-): Promise<{ docId: string; docName: string }> {
+async function resolveTarget(userId: string, body: SendRequestBody): Promise<SendTarget> {
   if (body.destinationId) {
     const destination = await getDestination(userId, body.destinationId)
     if (!destination) throw new NotFoundError(`No destination "${body.destinationId}"`)
-    return { docId: destination.docId, docName: destination.docName }
+    return destination.type === 'google-doc'
+      ? { provider: 'google-doc', docId: destination.docId, docName: destination.docName }
+      : { provider: 'dropbox-file', path: destination.path, name: destination.name }
   }
-  // parseSendBody guarantees docId/docName are set in this branch.
-  return { docId: body.docId as string, docName: body.docName as string }
+  if (body.docId && body.docName) {
+    return { provider: 'google-doc', docId: body.docId, docName: body.docName }
+  }
+  // parseSendBody guarantees the dropbox fields are set in this branch.
+  return {
+    provider: 'dropbox-file',
+    path: body.dropboxPath as string,
+    name: body.dropboxName as string,
+  }
 }
 
 // Pulled out of index.ts so it's testable without booting the whole app --
@@ -284,6 +327,81 @@ export function createRequestHandler(clientDistDir: string) {
       return
     }
 
+    // --- Connect: authorize Dropbox as a send destination --------------
+
+    if (url.pathname === '/auth/connect/dropbox') {
+      const user = await requireUser(req, res)
+      if (!user) return
+      getDropboxAuthUrl()
+        .then((location) => {
+          res.writeHead(302, { Location: location })
+          res.end()
+        })
+        .catch((error: unknown) => {
+          // Most likely DROPBOX_APP_KEY/SECRET/REDIRECT_URI aren't set yet.
+          console.error('[auth] failed to build Dropbox auth URL', error)
+          res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Dropbox OAuth is not configured')
+        })
+      return
+    }
+
+    if (url.pathname === '/auth/connect/dropbox/callback') {
+      const user = await requireUser(req, res)
+      if (!user) return
+      const code = url.searchParams.get('code')
+      if (!code) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Missing code')
+        return
+      }
+      handleDropboxCallback(user.id, code)
+        .then(() => {
+          res.writeHead(302, { Location: '/' })
+          res.end()
+        })
+        .catch((error: unknown) => {
+          console.error('[auth] Dropbox OAuth callback failed', error)
+          res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Dropbox authorization failed')
+        })
+      return
+    }
+
+    if (url.pathname === '/api/dropbox/status') {
+      const user = await requireUser(req, res)
+      if (!user) return
+      isDropboxConnected(user.id)
+        .then((connected) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ connected }))
+        })
+        .catch((error: unknown) => {
+          console.error('[auth] failed to check Dropbox connection status', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ connected: false }))
+        })
+      return
+    }
+
+    if (url.pathname === '/api/dropbox/search') {
+      const user = await requireUser(req, res)
+      if (!user) return
+      searchDropboxFiles(user.id, url.searchParams.get('q') ?? '')
+        .then((files) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ files }))
+        })
+        .catch((error: unknown) => {
+          if (error instanceof DropboxNotConnectedError) {
+            res.writeHead(401, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: error.message }))
+            return
+          }
+          console.error('[dropbox] search failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Dropbox search failed' }))
+        })
+      return
+    }
+
     if (url.pathname === '/api/destinations') {
       const user = await requireUser(req, res)
       if (!user) return
@@ -310,12 +428,18 @@ export function createRequestHandler(clientDistDir: string) {
       readJsonBody(req)
         .then(async (body) => {
           const parsed = parseSendBody(body)
-          const { docId, docName } = await resolveTarget(user.id, parsed)
-          await appendTextToDoc(user.id, docId, parsed.text)
-          const destination = await saveGoogleDocDestination(user.id, docId, docName)
+          const target = await resolveTarget(user.id, parsed)
+          let destination: Destination
+          if (target.provider === 'google-doc') {
+            await appendTextToDoc(user.id, target.docId, parsed.text)
+            destination = await saveGoogleDocDestination(user.id, target.docId, target.docName)
+          } else {
+            await appendTextToDropboxFile(user.id, target.path, parsed.text)
+            destination = await saveDropboxFileDestination(user.id, target.path, target.name)
+          }
           await appendSendLogEntry(user.id, {
             destinationId: destination.id,
-            docName: destination.docName,
+            docName: destination.type === 'google-doc' ? destination.docName : destination.name,
             textPreview: truncateForPreview(parsed.text),
           })
           res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -332,7 +456,7 @@ export function createRequestHandler(clientDistDir: string) {
             res.end(JSON.stringify({ error: error.message }))
             return
           }
-          if (error instanceof GoogleNotConnectedError) {
+          if (error instanceof GoogleNotConnectedError || error instanceof DropboxNotConnectedError) {
             res.writeHead(401, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ error: error.message }))
             return

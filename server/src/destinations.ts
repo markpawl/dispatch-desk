@@ -14,9 +14,15 @@ export interface GoogleDocDestination {
   createdAt: string
 }
 
-// The only destination type so far -- widen this once a second kind exists
-// (see docs/IDEAS.md's Pending item 1 on reconciling this into MCP tools).
-export type Destination = GoogleDocDestination
+export interface DropboxFileDestination {
+  id: string
+  type: 'dropbox-file'
+  path: string
+  name: string
+  createdAt: string
+}
+
+export type Destination = GoogleDocDestination | DropboxFileDestination
 
 async function loadAll(userId: string): Promise<Destination[]> {
   const redis = getRedisClient()
@@ -52,7 +58,9 @@ export async function saveGoogleDocDestination(
   docName: string,
 ): Promise<GoogleDocDestination> {
   const destinations = await loadAll(userId)
-  const existing = destinations.find((d) => d.type === 'google-doc' && d.docId === docId)
+  const existing = destinations.find(
+    (d): d is GoogleDocDestination => d.type === 'google-doc' && d.docId === docId,
+  )
   if (existing) return existing
 
   const destination: GoogleDocDestination = {
@@ -60,6 +68,29 @@ export async function saveGoogleDocDestination(
     type: 'google-doc',
     docId,
     docName,
+    createdAt: new Date().toISOString(),
+  }
+  await saveAll(userId, [...destinations, destination])
+  return destination
+}
+
+// Upserts by path -- same rationale as saveGoogleDocDestination's upsert.
+export async function saveDropboxFileDestination(
+  userId: string,
+  path: string,
+  name: string,
+): Promise<DropboxFileDestination> {
+  const destinations = await loadAll(userId)
+  const existing = destinations.find(
+    (d): d is DropboxFileDestination => d.type === 'dropbox-file' && d.path === path,
+  )
+  if (existing) return existing
+
+  const destination: DropboxFileDestination = {
+    id: randomUUID(),
+    type: 'dropbox-file',
+    path,
+    name,
     createdAt: new Date().toISOString(),
   }
   await saveAll(userId, [...destinations, destination])
