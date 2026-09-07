@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
   handleLoginCallback: vi.fn(async (_code: string) => ({ token: 'sess-token-123' })),
   EmailNotAllowedError,
   isGoogleConnected: vi.fn(async (_userId: string) => false),
+  disconnectGoogle: vi.fn(async (_userId: string) => undefined),
+  disconnectDropbox: vi.fn(async (_userId: string) => undefined),
   getSessionUser: vi.fn(async () => null as { id: string; email: string; name: string } | null),
   getSessionCookieToken: vi.fn(() => undefined as string | undefined),
   destroySession: vi.fn(async (_token: string) => undefined),
@@ -27,10 +29,24 @@ const mocks = vi.hoisted(() => {
   listDestinations: vi.fn(async (_userId: string) => [
     { id: 'dest-1', type: 'google-doc' as const, docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
   ]),
-  getDestination: vi.fn(async (_userId: string, id: string) =>
-    id === 'dest-1'
-      ? { id: 'dest-1', type: 'google-doc' as const, docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' }
-      : undefined,
+  getDestination: vi.fn(
+    async (
+      _userId: string,
+      id: string,
+    ): Promise<
+      | { id: string; type: 'google-doc'; docId: string; docName: string; createdAt: string }
+      | { id: string; type: 'dropbox-file'; path: string; name: string; createdAt: string }
+      | undefined
+    > =>
+      id === 'dest-1'
+        ? {
+            id: 'dest-1',
+            type: 'google-doc',
+            docId: 'doc-1',
+            docName: 'Meeting Notes',
+            createdAt: 'now',
+          }
+        : undefined,
   ),
   saveGoogleDocDestination: vi.fn(async (_userId: string, docId: string, docName: string) => ({
     id: 'dest-new',
@@ -68,6 +84,7 @@ vi.mock('./googleAuth.js', () => ({
   handleLoginCallback: mocks.handleLoginCallback,
   EmailNotAllowedError: mocks.EmailNotAllowedError,
   isGoogleConnected: mocks.isGoogleConnected,
+  disconnectGoogle: mocks.disconnectGoogle,
 }))
 vi.mock('./session.js', () => ({
   getSessionUser: mocks.getSessionUser,
@@ -93,6 +110,7 @@ vi.mock('./dropboxAuth.js', () => ({
   getDropboxAuthUrl: mocks.getDropboxAuthUrl,
   handleDropboxCallback: mocks.handleDropboxCallback,
   isDropboxConnected: mocks.isDropboxConnected,
+  disconnectDropbox: mocks.disconnectDropbox,
 }))
 vi.mock('./dropboxFiles.js', () => ({
   DropboxNotConnectedError: mocks.DropboxNotConnectedError,
@@ -231,10 +249,12 @@ describe('requestHandler', () => {
       ['GET', '/auth/connect/google'],
       ['GET', '/auth/connect/google/callback?code=x'],
       ['GET', '/api/google/status'],
+      ['POST', '/api/google/disconnect'],
       ['GET', '/api/google-docs/search?q=x'],
       ['GET', '/auth/connect/dropbox'],
       ['GET', '/auth/connect/dropbox/callback?code=x'],
       ['GET', '/api/dropbox/status'],
+      ['POST', '/api/dropbox/disconnect'],
       ['GET', '/api/dropbox/search?q=x'],
       ['GET', '/api/destinations'],
       ['POST', '/api/send'],
@@ -300,6 +320,24 @@ describe('requestHandler', () => {
     expect(await response.json()).toEqual({ connected: true })
   })
 
+  it('POST /api/google/disconnect forgets the connection', async () => {
+    const response = await fetch(`${baseUrl}/api/google/disconnect`, { method: 'POST' })
+    expect(response.status).toBe(200)
+    expect(mocks.disconnectGoogle).toHaveBeenCalledWith('user-1')
+  })
+
+  it('GET /api/google/disconnect is a 405', async () => {
+    const response = await fetch(`${baseUrl}/api/google/disconnect`)
+    expect(response.status).toBe(405)
+    expect(mocks.disconnectGoogle).not.toHaveBeenCalled()
+  })
+
+  it('POST /api/google/disconnect is a 500 on failure', async () => {
+    mocks.disconnectGoogle.mockRejectedValueOnce(new Error('redis down'))
+    const response = await fetch(`${baseUrl}/api/google/disconnect`, { method: 'POST' })
+    expect(response.status).toBe(500)
+  })
+
   it('GET /api/google-docs/search returns matching docs', async () => {
     const response = await fetch(`${baseUrl}/api/google-docs/search?q=Meeting`)
     expect(mocks.searchGoogleDocs).toHaveBeenCalledWith('user-1', 'Meeting')
@@ -356,6 +394,15 @@ describe('requestHandler', () => {
       mocks.isDropboxConnected.mockResolvedValueOnce(true)
       const response = await fetch(`${baseUrl}/api/dropbox/status`)
       expect(await response.json()).toEqual({ connected: true })
+    })
+
+    it('POST /api/dropbox/disconnect forgets the connection; GET is a 405', async () => {
+      const ok = await fetch(`${baseUrl}/api/dropbox/disconnect`, { method: 'POST' })
+      expect(ok.status).toBe(200)
+      expect(mocks.disconnectDropbox).toHaveBeenCalledWith('user-1')
+
+      const wrongMethod = await fetch(`${baseUrl}/api/dropbox/disconnect`)
+      expect(wrongMethod.status).toBe(405)
     })
 
     it('GET /api/dropbox/search returns matching files', async () => {

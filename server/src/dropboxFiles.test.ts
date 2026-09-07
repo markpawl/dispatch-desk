@@ -1,11 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const filesSearchV2 = vi.fn()
-const filesDownload = vi.fn()
-const filesUpload = vi.fn(async () => ({ result: {} }))
+// Each takes an arg (so `.mock.calls[0][0]` is well-typed) and returns a
+// loose `{ result: unknown }` the tests refine per case with mockResolvedValueOnce.
+const filesSearchV2 = vi.fn(async (_arg: unknown): Promise<{ result: unknown }> => ({
+  result: { matches: [] },
+}))
+const filesDownload = vi.fn(
+  async (_arg: unknown): Promise<{ result: unknown }> => ({ result: {} }),
+)
+const filesUpload = vi.fn(
+  async (_arg: unknown): Promise<{ result: unknown }> => ({ result: {} }),
+)
 const fakeClient = { filesSearchV2, filesDownload, filesUpload }
 
-const getAuthorizedDropboxClient = vi.fn(async (_userId: string) => fakeClient as unknown)
+const getAuthorizedDropboxClient = vi.fn(
+  async (_userId: string): Promise<typeof fakeClient | null> => fakeClient,
+)
 vi.mock('./dropboxAuth.js', () => ({ getAuthorizedDropboxClient }))
 
 const { searchDropboxFiles, appendTextToDropboxFile, DropboxNotConnectedError } = await import(
