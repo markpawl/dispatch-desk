@@ -68,3 +68,12 @@ _Ordered easiest to hardest to implement._
    `client/src/vite-env.d.ts` + `App.tsx` (`.version` -- 0.75rem, `#888`, matching the smaller/grey
    ask) and `server/src/version.ts` + `index.ts`'s `/healthz` read it, falling back to `"dev"`/`null`
    in local dev.)_
+4. [destinations] Right-side area with two lists — channels and destinations: a togglable panel on
+   the right edge of the screen showing two separate lists, **channels** (the available destination
+   types/mechanisms) and **destinations** (the configured instances created from them), rather than
+   the single destinations list `docs/REQUIREMENTS.md` previously described. _(Landed the panel
+   itself with dummy/hardcoded data for both lists — see `docs/REQUIREMENTS.md`'s Destination
+   sidebar section and `client/src/components/DestinationsPanel.tsx`, toggled from a toolbar
+   button. Still open: the actual "create a destination by picking a channel and supplying its
+   config" flow — that's real functionality, not layout, and falls out of the still-pending MCP
+   Host work above (items 1 and 3).)_
