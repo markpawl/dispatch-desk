@@ -5,6 +5,7 @@ import {
   getDestination,
   listDestinations,
   saveDropboxFileDestination,
+  saveEmailDestination,
   saveGoogleDocDestination,
 } from './destinations.js'
 import {
@@ -18,6 +19,8 @@ import {
   appendTextToDropboxFile,
   searchDropboxFiles,
 } from './dropboxFiles.js'
+import { nextEmailSequenceNumber } from './emailSequence.js'
+import { sendEmail } from './gmail.js'
 import {
   EmailNotAllowedError,
   disconnectGoogle,
@@ -94,9 +97,19 @@ class NotFoundError extends Error {}
 
 // A resolved send target, tagged by provider. An existing `destinationId`
 // resolves to one of these; an ad-hoc send carries one provider's fields.
+// Email has no ad-hoc form (see parseSendBody) -- it's only ever reached via
+// an existing destinationId, so its variant always carries the resolved
+// destination's id along with the fields sendEmail/the subject line need.
 type SendTarget =
   | { provider: 'google-doc'; docId: string; docName: string }
   | { provider: 'dropbox-file'; path: string; name: string }
+  | {
+      provider: 'email'
+      destinationId: string
+      address: string
+      shortLabel: string
+      emailSubjectLabel?: string
+    }
 
 interface SendRequestBody {
   text: string
@@ -105,19 +118,26 @@ interface SendRequestBody {
   docName?: string
   dropboxPath?: string
   dropboxName?: string
+  // Only meaningful when the target resolves to an email destination -- the
+  // sending browser's local day ("yyyy-mm-dd", for the daily sequence's day
+  // boundary) and local clock ("mm/dd/yyyy HH:mm") for the subject line.
+  localDate?: string
+  localTime?: string
 }
 
 function parseSendBody(body: unknown): SendRequestBody {
   if (typeof body !== 'object' || body === null) throw new BadRequestError('Expected a JSON body')
-  const { text, destinationId, docId, docName, dropboxPath, dropboxName } = body as Record<
-    string,
-    unknown
-  >
+  const { text, destinationId, docId, docName, dropboxPath, dropboxName, localDate, localTime } =
+    body as Record<string, unknown>
   if (typeof text !== 'string' || text.trim() === '') {
     throw new BadRequestError('"text" is required')
   }
+  const local = {
+    ...(typeof localDate === 'string' && localDate ? { localDate } : {}),
+    ...(typeof localTime === 'string' && localTime ? { localTime } : {}),
+  }
   if (typeof destinationId === 'string' && destinationId) {
-    return { text, destinationId }
+    return { text, destinationId, ...local }
   }
   if (typeof docId === 'string' && docId && typeof docName === 'string' && docName) {
     return { text, docId, docName }
@@ -139,9 +159,20 @@ async function resolveTarget(userId: string, body: SendRequestBody): Promise<Sen
   if (body.destinationId) {
     const destination = await getDestination(userId, body.destinationId)
     if (!destination) throw new NotFoundError(`No destination "${body.destinationId}"`)
-    return destination.type === 'google-doc'
-      ? { provider: 'google-doc', docId: destination.docId, docName: destination.docName }
-      : { provider: 'dropbox-file', path: destination.path, name: destination.name }
+    switch (destination.type) {
+      case 'google-doc':
+        return { provider: 'google-doc', docId: destination.docId, docName: destination.docName }
+      case 'dropbox-file':
+        return { provider: 'dropbox-file', path: destination.path, name: destination.name }
+      case 'email':
+        return {
+          provider: 'email',
+          destinationId: destination.id,
+          address: destination.address,
+          shortLabel: destination.shortLabel,
+          emailSubjectLabel: destination.emailSubjectLabel,
+        }
+    }
   }
   if (body.docId && body.docName) {
     return { provider: 'google-doc', docId: body.docId, docName: body.docName }
@@ -151,6 +182,58 @@ async function resolveTarget(userId: string, body: SendRequestBody): Promise<Sen
     provider: 'dropbox-file',
     path: body.dropboxPath as string,
     name: body.dropboxName as string,
+  }
+}
+
+// A loose but useful check, not full RFC 5322 validation -- catches the
+// obviously-wrong inputs without rejecting anything a real address could be.
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+interface CreateEmailDestinationBody {
+  type: 'email'
+  address: string
+  shortLabel: string
+  emailSubjectLabel?: string
+}
+
+// POST /api/destinations only creates 'email' destinations for now --
+// google-doc/dropbox-file are still created as a send side-effect (Group D
+// per docs/CURRENT-WORK.md moves them to this endpoint too).
+function parseCreateDestinationBody(body: unknown): CreateEmailDestinationBody {
+  if (typeof body !== 'object' || body === null) throw new BadRequestError('Expected a JSON body')
+  const { type, address, shortLabel, emailSubjectLabel } = body as Record<string, unknown>
+  if (type !== 'email') {
+    throw new BadRequestError('Only "email" destinations can be created here for now')
+  }
+  if (typeof address !== 'string' || !EMAIL_FORMAT.test(address.trim())) {
+    throw new BadRequestError('"address" must be a valid email address')
+  }
+  if (typeof shortLabel !== 'string' || shortLabel.trim() === '') {
+    throw new BadRequestError('"shortLabel" is required')
+  }
+  const trimmedSubjectLabel =
+    typeof emailSubjectLabel === 'string' && emailSubjectLabel.trim() !== ''
+      ? emailSubjectLabel.trim()
+      : undefined
+  return {
+    type: 'email',
+    address: address.trim(),
+    shortLabel: shortLabel.trim(),
+    emailSubjectLabel: trimmedSubjectLabel,
+  }
+}
+
+// The send log's display name for a destination -- each type names itself
+// differently until shortLabel is added to google-doc/dropbox-file too
+// (Group D per docs/CURRENT-WORK.md).
+function destinationLogName(destination: Destination): string {
+  switch (destination.type) {
+    case 'google-doc':
+      return destination.docName
+    case 'dropbox-file':
+      return destination.name
+    case 'email':
+      return destination.shortLabel
   }
 }
 
@@ -448,6 +531,33 @@ export function createRequestHandler(clientDistDir: string) {
     if (url.pathname === '/api/destinations') {
       const user = await requireUser(req, res)
       if (!user) return
+
+      if (req.method === 'POST') {
+        readJsonBody(req)
+          .then(async (body) => {
+            const parsed = parseCreateDestinationBody(body)
+            const destination = await saveEmailDestination(
+              user.id,
+              parsed.address,
+              parsed.shortLabel,
+              parsed.emailSubjectLabel,
+            )
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ ok: true, destination }))
+          })
+          .catch((error: unknown) => {
+            if (error instanceof BadRequestError) {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: error.message }))
+              return
+            }
+            console.error('[destinations] create failed', error)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Failed to create destination' }))
+          })
+        return
+      }
+
       listDestinations(user.id)
         .then((destinations) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -494,16 +604,33 @@ export function createRequestHandler(clientDistDir: string) {
           const parsed = parseSendBody(body)
           const target = await resolveTarget(user.id, parsed)
           let destination: Destination
-          if (target.provider === 'google-doc') {
-            await appendTextToDoc(user.id, target.docId, parsed.text)
-            destination = await saveGoogleDocDestination(user.id, target.docId, target.docName)
-          } else {
-            await appendTextToDropboxFile(user.id, target.path, parsed.text)
-            destination = await saveDropboxFileDestination(user.id, target.path, target.name)
+          switch (target.provider) {
+            case 'google-doc':
+              await appendTextToDoc(user.id, target.docId, parsed.text)
+              destination = await saveGoogleDocDestination(user.id, target.docId, target.docName)
+              break
+            case 'dropbox-file':
+              await appendTextToDropboxFile(user.id, target.path, parsed.text)
+              destination = await saveDropboxFileDestination(user.id, target.path, target.name)
+              break
+            case 'email': {
+              if (!parsed.localDate || !parsed.localTime) {
+                throw new BadRequestError(
+                  '"localDate" and "localTime" are required to send to an email destination',
+                )
+              }
+              const seq = await nextEmailSequenceNumber(target.destinationId, parsed.localDate)
+              const subject = `${target.emailSubjectLabel || target.shortLabel} ${parsed.localTime} ${seq}`
+              await sendEmail(user.id, target.address, subject, parsed.text)
+              const existing = await getDestination(user.id, target.destinationId)
+              if (!existing) throw new NotFoundError(`No destination "${target.destinationId}"`)
+              destination = existing
+              break
+            }
           }
           await appendSendLogEntry(user.id, {
             destinationId: destination.id,
-            docName: destination.type === 'google-doc' ? destination.docName : destination.name,
+            docName: destinationLogName(destination),
             textPreview: truncateForPreview(parsed.text),
           })
           res.writeHead(200, { 'Content-Type': 'application/json' })

@@ -15,6 +15,7 @@ const {
   getDestination,
   saveGoogleDocDestination,
   saveDropboxFileDestination,
+  saveEmailDestination,
   deleteDestination,
 } = await import('./destinations.js')
 
@@ -108,5 +109,42 @@ describe('destinations', () => {
 
     expect(await listDestinations('user-1')).toEqual([mine])
     expect(await listDestinations('user-2')).toEqual([])
+  })
+
+  it('saves a new email destination', async () => {
+    const destination = await saveEmailDestination(
+      'user-1',
+      'to@example.com',
+      'Weekly Notes',
+      'Notes',
+    )
+    expect(destination).toMatchObject({
+      type: 'email',
+      address: 'to@example.com',
+      shortLabel: 'Weekly Notes',
+      emailSubjectLabel: 'Notes',
+    })
+    expect(destination.id).toBeTruthy()
+    expect(destination.createdAt).toBeTruthy()
+    expect(await listDestinations('user-1')).toEqual([destination])
+  })
+
+  it('saves an email destination with no emailSubjectLabel', async () => {
+    const destination = await saveEmailDestination('user-1', 'to@example.com', 'Weekly Notes')
+    expect(destination.emailSubjectLabel).toBeUndefined()
+  })
+
+  it('creates a new email destination each time rather than upserting by address', async () => {
+    const first = await saveEmailDestination('user-1', 'to@example.com', 'Weekly Notes')
+    const second = await saveEmailDestination('user-1', 'to@example.com', 'Ideas')
+    expect(first.id).not.toBe(second.id)
+    expect(await listDestinations('user-1')).toEqual([first, second])
+  })
+
+  it('all three destination types coexist in one list', async () => {
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
+    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md')
+    const email = await saveEmailDestination('user-1', 'to@example.com', 'Weekly Notes')
+    expect(await listDestinations('user-1')).toEqual([doc, file, email])
   })
 })

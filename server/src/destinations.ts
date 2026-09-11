@@ -22,7 +22,22 @@ export interface DropboxFileDestination {
   createdAt: string
 }
 
-export type Destination = GoogleDocDestination | DropboxFileDestination
+export interface EmailDestination {
+  id: string
+  type: 'email'
+  address: string
+  // The list-display label, fixed at creation -- there's no edit UI (see
+  // docs/CURRENT-WORK.md's Group C/D), so "delete and create a new one" is
+  // how a different label is obtained.
+  shortLabel: string
+  // Used to build the outgoing email's subject line instead of shortLabel
+  // when set (falls back to shortLabel at send time -- see
+  // server/src/requestHandler.ts's /api/send).
+  emailSubjectLabel?: string
+  createdAt: string
+}
+
+export type Destination = GoogleDocDestination | DropboxFileDestination | EmailDestination
 
 async function loadAll(userId: string): Promise<Destination[]> {
   const redis = getRedisClient()
@@ -101,6 +116,30 @@ export async function saveDropboxFileDestination(
     type: 'dropbox-file',
     path,
     name,
+    createdAt: new Date().toISOString(),
+  }
+  await saveAll(userId, [...destinations, destination])
+  return destination
+}
+
+// Unlike the two save*Destination functions above, this always creates a
+// new entry rather than upserting by some natural key -- an email
+// destination's shortLabel/emailSubjectLabel are fixed at creation (see
+// EmailDestination above), so two destinations legitimately can share the
+// same address with different labels.
+export async function saveEmailDestination(
+  userId: string,
+  address: string,
+  shortLabel: string,
+  emailSubjectLabel?: string,
+): Promise<EmailDestination> {
+  const destinations = await loadAll(userId)
+  const destination: EmailDestination = {
+    id: randomUUID(),
+    type: 'email',
+    address,
+    shortLabel,
+    emailSubjectLabel,
     createdAt: new Date().toISOString(),
   }
   await saveAll(userId, [...destinations, destination])

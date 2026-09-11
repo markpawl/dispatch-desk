@@ -36,17 +36,55 @@ const mocks = vi.hoisted(() => {
     ): Promise<
       | { id: string; type: 'google-doc'; docId: string; docName: string; createdAt: string }
       | { id: string; type: 'dropbox-file'; path: string; name: string; createdAt: string }
+      | {
+          id: string
+          type: 'email'
+          address: string
+          shortLabel: string
+          emailSubjectLabel?: string
+          createdAt: string
+        }
       | undefined
-    > =>
-      id === 'dest-1'
-        ? {
-            id: 'dest-1',
-            type: 'google-doc',
-            docId: 'doc-1',
-            docName: 'Meeting Notes',
-            createdAt: 'now',
-          }
-        : undefined,
+    > => {
+      if (id === 'dest-1') {
+        return {
+          id: 'dest-1',
+          type: 'google-doc',
+          docId: 'doc-1',
+          docName: 'Meeting Notes',
+          createdAt: 'now',
+        }
+      }
+      if (id === 'dest-email-1') {
+        return {
+          id: 'dest-email-1',
+          type: 'email',
+          address: 'to@example.com',
+          shortLabel: 'Weekly Notes',
+          createdAt: 'now',
+        }
+      }
+      return undefined
+    },
+  ),
+  saveEmailDestination: vi.fn(
+    async (
+      _userId: string,
+      address: string,
+      shortLabel: string,
+      emailSubjectLabel?: string,
+    ) => ({
+      id: 'dest-email-new',
+      type: 'email' as const,
+      address,
+      shortLabel,
+      emailSubjectLabel,
+      createdAt: 'now',
+    }),
+  ),
+  nextEmailSequenceNumber: vi.fn(async (_destinationId: string, _localDateKey: string) => 0),
+  sendEmail: vi.fn(
+    async (_userId: string, _to: string, _subject: string, _body: string) => undefined,
   ),
   saveGoogleDocDestination: vi.fn(async (_userId: string, docId: string, docName: string) => ({
     id: 'dest-new',
@@ -106,8 +144,11 @@ vi.mock('./destinations.js', () => ({
   getDestination: mocks.getDestination,
   saveGoogleDocDestination: mocks.saveGoogleDocDestination,
   saveDropboxFileDestination: mocks.saveDropboxFileDestination,
+  saveEmailDestination: mocks.saveEmailDestination,
   deleteDestination: mocks.deleteDestination,
 }))
+vi.mock('./emailSequence.js', () => ({ nextEmailSequenceNumber: mocks.nextEmailSequenceNumber }))
+vi.mock('./gmail.js', () => ({ sendEmail: mocks.sendEmail }))
 vi.mock('./dropboxAuth.js', () => ({
   getDropboxAuthUrl: mocks.getDropboxAuthUrl,
   handleDropboxCallback: mocks.handleDropboxCallback,
@@ -259,6 +300,7 @@ describe('requestHandler', () => {
       ['POST', '/api/dropbox/disconnect'],
       ['GET', '/api/dropbox/search?q=x'],
       ['GET', '/api/destinations'],
+      ['POST', '/api/destinations'],
       ['DELETE', '/api/destinations/dest-1'],
       ['POST', '/api/send'],
     ])('%s %s is 401 when signed out', async (method, path) => {
@@ -451,6 +493,68 @@ describe('requestHandler', () => {
     })
   })
 
+  describe('POST /api/destinations (create)', () => {
+    it('creates an email destination', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'email',
+          address: 'to@example.com',
+          shortLabel: 'Weekly Notes',
+          emailSubjectLabel: 'Notes',
+        }),
+      })
+      expect(response.status).toBe(200)
+      expect(mocks.saveEmailDestination).toHaveBeenCalledWith(
+        'user-1',
+        'to@example.com',
+        'Weekly Notes',
+        'Notes',
+      )
+      const body = (await response.json()) as { ok: boolean; destination: { type: string } }
+      expect(body.ok).toBe(true)
+      expect(body.destination.type).toBe('email')
+    })
+
+    it('omits emailSubjectLabel when blank', async () => {
+      await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'email', address: 'to@example.com', shortLabel: 'Notes' }),
+      })
+      expect(mocks.saveEmailDestination).toHaveBeenCalledWith(
+        'user-1',
+        'to@example.com',
+        'Notes',
+        undefined,
+      )
+    })
+
+    it('400s for an unsupported type', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'google-doc', address: 'x' }),
+      })
+      expect(response.status).toBe(400)
+      expect(mocks.saveEmailDestination).not.toHaveBeenCalled()
+    })
+
+    it('400s for a malformed address', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'email', address: 'not-an-email', shortLabel: 'Notes' }),
+      })
+      expect(response.status).toBe(400)
+    })
+
+    it('400s when shortLabel is missing', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'email', address: 'to@example.com' }),
+      })
+      expect(response.status).toBe(400)
+    })
+  })
+
   describe('POST /api/send', () => {
     it('sends to an existing destinationId: appends, upserts, logs', async () => {
       const response = await fetch(`${baseUrl}/api/send`, {
@@ -511,6 +615,68 @@ describe('requestHandler', () => {
       })
       expect(mocks.appendTextToDropboxFile).toHaveBeenCalledWith('user-1', '/saved.txt', 'x')
       expect(response.status).toBe(200)
+    })
+
+    it('sends to a saved email destination: builds the subject, sends, logs by shortLabel', async () => {
+      mocks.nextEmailSequenceNumber.mockResolvedValueOnce(3)
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({
+          text: 'hello',
+          destinationId: 'dest-email-1',
+          localDate: '2026-09-11',
+          localTime: '09/11/2026 14:30',
+        }),
+      })
+      expect(mocks.nextEmailSequenceNumber).toHaveBeenCalledWith('dest-email-1', '2026-09-11')
+      expect(mocks.sendEmail).toHaveBeenCalledWith(
+        'user-1',
+        'to@example.com',
+        'Weekly Notes 09/11/2026 14:30 3',
+        'hello',
+      )
+      expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ docName: 'Weekly Notes', textPreview: 'hello' }),
+      )
+      const body = (await response.json()) as { ok: boolean; destination: { type: string } }
+      expect(body.ok).toBe(true)
+      expect(body.destination.type).toBe('email')
+    })
+
+    it('uses emailSubjectLabel over shortLabel in the subject when set', async () => {
+      mocks.getDestination.mockResolvedValueOnce({
+        id: 'dest-email-1',
+        type: 'email' as const,
+        address: 'to@example.com',
+        shortLabel: 'Weekly Notes',
+        emailSubjectLabel: 'Notes',
+        createdAt: 'now',
+      })
+      await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({
+          text: 'hello',
+          destinationId: 'dest-email-1',
+          localDate: '2026-09-11',
+          localTime: '09/11/2026 14:30',
+        }),
+      })
+      expect(mocks.sendEmail).toHaveBeenCalledWith(
+        'user-1',
+        'to@example.com',
+        expect.stringMatching(/^Notes /),
+        'hello',
+      )
+    })
+
+    it('400s sending to an email destination without localDate/localTime', async () => {
+      const response = await fetch(`${baseUrl}/api/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text: 'hello', destinationId: 'dest-email-1' }),
+      })
+      expect(response.status).toBe(400)
+      expect(mocks.sendEmail).not.toHaveBeenCalled()
     })
 
     it('400s when text is missing', async () => {
