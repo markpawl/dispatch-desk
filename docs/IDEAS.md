@@ -41,11 +41,13 @@ _Ordered easiest to hardest to implement._
    needs packaging/install docs but otherwise reuses the same per-user-accounts code as-is (a
    self-hoster just sets their own allowlist). Not started -- current work is the invite-only,
    developer's-own-use phase both of these build on top of.
-4. [destinations] Reconcile the Google Doc destination into the MCP Host architecture: it shipped as
-   a direct Drive/Docs API integration in the server (see `docs/REQUIREMENTS.md`'s Destination
-   Architecture section) rather than through an MCP Host/server, since standing up MCP infrastructure
-   before any destination existed wasn't worth the upfront cost. Revisit once there's a second
-   destination to justify building the MCP Host for real.
+4. [destinations] Reconcile the three real destinations (Google Doc, Dropbox file, Email) into the
+   MCP Host architecture: all three shipped as direct API integrations in the server (see
+   `docs/REQUIREMENTS.md`'s Destination Architecture section) rather than through an MCP Host/
+   server, since standing up MCP infrastructure before any destination existed wasn't worth the
+   upfront cost -- each one added since has stayed on the same pattern rather than switching
+   partway through. Revisit now that there's more than one destination to justify building the MCP
+   Host for real.
 5. [destinations] Harden what's live first: before adding destination features, add tests/health
    checks around the Sync Server + Redis persistence, confirm Fly secrets are set, and consider a
    `/health` endpoint. Lower risk, but no new user-facing capability.
@@ -66,7 +68,7 @@ _Ordered easiest to hardest to implement._
    (Google Drive/Dropbox) proves limiting. See `docs/REQUIREMENTS.md`'s Destination Architecture
    section for the current decision.
 9. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
-10. [later] new-idea, undefined
+10. [later] dispatch-desk - client - editor-component: alternative to tiptap, Quill: A lightweight, drop-in rich text editor that provides the exact standard formatting options (bold, italics, underline, lists, links, attachments) seen in Calendar.
 
 #### Addressed
 
@@ -90,9 +92,10 @@ _Ordered easiest to hardest to implement._
 4. [destinations] Right-side area with two lists — channels and destinations: a togglable panel on
    the right edge of the screen showing two separate lists, **channels** (the available destination
    types/mechanisms) and **destinations** (the configured instances created from them), rather than
-   the single destinations list `docs/REQUIREMENTS.md` previously described. _(Landed the panel
-   itself with dummy/hardcoded data for both lists — see `docs/REQUIREMENTS.md`'s Destination
-   sidebar section and `client/src/components/DestinationsPanel.tsx`, toggled from a toolbar
-   button. Still open: the actual "create a destination by picking a channel and supplying its
-   config" flow — that's real functionality, not layout, and falls out of the still-pending MCP
-   Host work above (items 1 and 3).)_
+   the single destinations list `docs/REQUIREMENTS.md` previously described. _(Landed, panel and
+   both lists now fully real — see `docs/REQUIREMENTS.md`'s Destination sidebar/Send flow sections
+   and `client/src/components/DestinationsPanel.tsx`/`DestinationForm.tsx`. Clicking a channel
+   creates a destination of that type (with a "start with existing" template picker); destinations
+   are deletable with an inline confirm. Channels are the three destinations that exist today
+   (Google Doc, Dropbox file, Email) — still direct API integrations, not the still-pending MCP
+   Host; see Pending item 4 above.)_

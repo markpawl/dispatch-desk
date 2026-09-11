@@ -27,24 +27,38 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   and/or Dropbox — not the local filesystem, for now); appended to an existing document; a row in
   a data store; AI-integrated into a larger body of information (merged into whichever of several
   files in a project folder it best fits).
-- **First concrete implementation (a Google Doc destination)**: trigger is a "Send" button (in the
-  toolbar area, `client/src/components/SendMenu.tsx`) rather than a right-click menu, since that
-  menu doesn't exist yet. Enabled only with a non-empty selection; opens a popover listing saved
-  destinations plus a Google Docs search box for picking/saving a new one. Auth is a real in-app
-  Google OAuth flow (`/auth/connect/google`, per-user tokens in Redis — see Auth/Identity above; a
-  separate flow from "Sign in with Google", which grants no Drive/Docs access). Both halves of the
-  default post-send action are implemented: the server writes a log entry (`server/src/sendLog.ts`,
-  a per-user capped Redis list) and the client deletes the sent text from the desktop on a
-  successful send. This is a direct Drive/Docs API integration, not an MCP tool — see the deviation
-  noted under Destination Architecture below.
-- **Second destination (a Dropbox file)**: same "Send" popover, with its own `/auth/connect/dropbox`
-  OAuth flow (per-user refresh token in Redis) and its own search box. Scoped to **text-appendable
-  files only** (`.txt`/`.md`) — since Dropbox has no native append, a send is download → prepend a
-  newline + the text → re-upload (overwrite; last-write-wins). Richer formats (`.docx`, `.xlsx`)
-  that need per-format processing are deferred to the "send-helper plugin structure" idea in
-  `docs/IDEAS.md`. Also a direct API integration (`dropbox` npm package), not an MCP tool.
-  `/api/send` dispatches on the destination's provider; `client/src/components/SendMenu.tsx` shows a
-  per-provider connect link / search box.
+- **Three concrete destinations today: Google Doc, Dropbox file, and Email** — trigger is a "Send"
+  button (in the toolbar area) rather than a right-click menu, since that menu doesn't exist yet.
+  All three are direct API integrations in the server, not MCP tools — see the deviation noted
+  under Destination Architecture below. Both halves of the default post-send action are
+  implemented: the server writes a log entry (`server/src/sendLog.ts`, a per-user capped Redis
+  list) and the client deletes the sent text from the desktop on a successful send.
+- **Creating a destination**: happens in the destination sidebar, not inline while sending — see
+  the Destination sidebar section below for the channel → form → "start with existing" → save
+  flow (`client/src/components/DestinationForm.tsx`), which is how all three types are created.
+  Google Doc/Dropbox auth is a real in-app OAuth flow (`/auth/connect/google` /
+  `/auth/connect/dropbox`, per-user tokens in Redis — see Auth/Identity above; separate from "Sign
+  in with Google", which grants no Drive/Docs/Gmail access).
+- **Sending**: the toolbar "Send" button (`client/src/components/SendMenu.tsx`) is enabled only
+  with a non-empty selection; its popover lists saved destinations by their `shortLabel` and sends
+  to the clicked one by id (`POST /api/send`). With no destinations saved yet, it opens
+  `DestinationForm` itself (channel picker first) instead of showing an empty list — the new
+  destination gets a "Send from ⟨shortLabel⟩" button once created, so the very first destination
+  doesn't require a separate trip to the sidebar.
+- **Google Doc**: appends text to the end of the doc's body (`server/src/googleDocs.ts`).
+- **Dropbox file**: scoped to **text-appendable files only** (`.txt`/`.md`) — since Dropbox has no
+  native append, a send is download → prepend a newline + the text → re-upload (overwrite;
+  last-write-wins) (`server/src/dropboxFiles.ts`). Richer formats (`.docx`, `.xlsx`) that need
+  per-format processing are deferred to the "send-helper plugin structure" idea in
+  `docs/IDEAS.md`.
+- **Email**: sent via the Gmail API (`server/src/gmail.ts`), reusing the same Google connection as
+  the Doc destination (a `gmail.send` scope added to it, not a separate connection) — mail goes
+  out as the signed-in user's own Gmail address. Subject line is built as
+  `` `${emailSubjectLabel || shortLabel} ${localTime} ${seq}` ``: `localTime` is the sending
+  browser's local clock (`mm/dd/yyyy HH:mm`, 24-hour), and `seq` is a zero-based sequence number
+  that resets at local midnight, scoped per destination (`server/src/emailSequence.ts`).
+- **Deleting a destination**: an "×" next to each row in the destination sidebar's Destinations
+  list, with an inline confirm before it actually deletes (`DELETE /api/destinations/:id`).
 
 ### Smart destination
 - Right-click → Destination → Smart invokes AI to suggest which registered destination a selection
@@ -52,12 +66,13 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 
 ### Destination sidebar
 - A togglable panel on the right edge of the screen (`client/src/components/DestinationsPanel.tsx`,
-  toggled via a toolbar button) shows two separate lists rather than one: **channels** (the
-  available destination types/mechanisms — e.g. email, a cloud-storage folder, a data-store row)
-  and **destinations** (the configured instances created from a channel plus its own config — e.g.
-  the Email channel configured with a specific recipient address). Currently both lists are
-  hardcoded placeholder data with no click behavior — display only, no real channel/destination
-  config or send-from-sidebar yet.
+  toggled via a toolbar button) shows two separate lists: **channels** (the three real destination
+  types — Email, Google Doc, Dropbox File) and **destinations** (the saved instances, each shown
+  by its `shortLabel`). Clicking a channel opens `client/src/components/DestinationForm.tsx` to
+  create a destination of that type — see the Send flow section above for what each channel's
+  form asks for, its "start with existing" template picker, and how deleting a destination works.
+  No send-from-sidebar yet — sending only happens through the toolbar's Send popover
+  (`SendMenu.tsx`), which reads from the same saved-destinations list.
 
 ### Purgatory
 - Holds text that doesn't currently match any registered destination. When a new destination is
@@ -105,11 +120,12 @@ Sections are filled in as decisions are made; nothing here is final until noted.
 - **File/folder-shaped destinations go through cloud storage, not the local filesystem.** "A new
   file in a project folder" means a folder in Google Drive and/or Dropbox, reached via their own
   MCP servers over HTTP — not a directory on the user's machine.
-- **Deliberate temporary deviation: the first real destination (a Google Doc) is a direct Drive/Docs
-  API integration in the server, not an MCP tool.** Building the MCP Host plus a remote-HTTP MCP
-  server just to ship one destination was judged not worth the upfront cost before any destination
-  existed at all. See `docs/IDEAS.md`'s Pending section for reconciling this back into the MCP
-  architecture above once there's more than one destination to justify it.
+- **Deliberate temporary deviation: all three real destinations (Google Doc, Dropbox file, Email)
+  are direct API integrations in the server, not MCP tools.** Building the MCP Host plus a
+  remote-HTTP MCP server just to ship the first destination was judged not worth the upfront cost
+  before any destination existed at all; each destination added since has stayed on the same
+  pattern rather than introducing a second architecture. See `docs/IDEAS.md`'s Pending section for
+  reconciling this back into the MCP architecture above.
 - **Connections are per-user** (see Auth/Identity): each signed-in person maintains their own
   separate set of connected services (their own Google tokens, their own Dropbox tokens, etc.) and
   their own saved destinations -- none of it shared with other people using the same deployment.
