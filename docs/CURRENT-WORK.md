@@ -80,16 +80,19 @@ Group D is broken into four sequential sub-steps, ordered so each stays safe/shi
 own: add new backend capability (D1) → add new UI using it (D2) → remove old UI now that it's
 replaced (D3) → remove old backend now that nothing needs it (D4).
 
-**Group D1 — Server: `POST /api/destinations` for Google Doc / Dropbox creation**
-- [ ] `server/src/destinations.ts` — add `shortLabel` to `GoogleDocDestination`/
+**Group D1 — Server: `POST /api/destinations` for Google Doc / Dropbox creation** ✅
+- [x] `server/src/destinations.ts` — add `shortLabel` to `GoogleDocDestination`/
       `DropboxFileDestination`; `saveGoogleDocDestination`/`saveDropboxFileDestination` take a
       `shortLabel` param
-- [ ] `server/src/requestHandler.ts` — `parseCreateDestinationBody` extended for `type:
+- [x] `server/src/requestHandler.ts` — `parseCreateDestinationBody` extended for `type:
       'google-doc'` (`docId`, `docName`, `shortLabel`) and `type: 'dropbox-file'` (`path`, `name`,
       `shortLabel`); `POST /api/destinations` calls the right save function. The still-active
       ad-hoc-send-creates-destination path passes `docName`/`name` as a stand-in `shortLabel`
       until D4 removes that path.
-- [ ] Test updates: `destinations.test.ts`, `requestHandler.test.ts`
+- [x] Test updates: `destinations.test.ts`, `requestHandler.test.ts`
+
+_(Done: commit `7cf391a`. Also dropped the now-redundant `destinationLogName` helper in favor of
+`destination.shortLabel` directly. Tests + lint + typecheck + build all green.)_
 
 **Group D2 — Client: `DestinationForm.tsx` + wire into `DestinationsPanel`**
 - [ ] New `client/src/components/DestinationForm.tsx`: channel picker (Email / Google Doc /
