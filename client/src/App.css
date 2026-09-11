@@ -385,10 +385,60 @@
 }
 
 .destinations-panel li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
   font-size: 0.9rem;
   padding: 0.3rem 0.4rem;
   border-radius: 4px;
   background: #f7f8fa;
+}
+
+.destinations-panel-empty {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.destinations-panel-delete {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  line-height: 1;
+  font-size: 1rem;
+  color: #888;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.destinations-panel-delete:hover {
+  color: #c0392b;
+  background: #fbeaea;
+}
+
+.destinations-panel-confirm {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.destinations-panel-confirm-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.destinations-panel-confirm-actions button {
+  flex: 1;
+  padding: 0.25rem 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
 }
 
 /* The actual contenteditable div Tiptap renders inside .desktop-editor. */

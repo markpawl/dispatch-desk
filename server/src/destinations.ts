@@ -74,6 +74,16 @@ export async function saveGoogleDocDestination(
   return destination
 }
 
+// No-op (not an error) if `id` doesn't exist -- callers that already have a
+// stale id (e.g. a double-click) shouldn't have to handle a 404 specially.
+export async function deleteDestination(userId: string, id: string): Promise<void> {
+  const destinations = await loadAll(userId)
+  await saveAll(
+    userId,
+    destinations.filter((destination) => destination.id !== id),
+  )
+}
+
 // Upserts by path -- same rationale as saveGoogleDocDestination's upsert.
 export async function saveDropboxFileDestination(
   userId: string,

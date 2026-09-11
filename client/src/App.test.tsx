@@ -50,6 +50,7 @@ function stubFetch(opts: { user?: MaybeUser; google?: boolean; dropbox?: boolean
       if (url.startsWith('/api/me')) return jsonResponse({ user })
       if (url.startsWith('/api/dropbox/status')) return jsonResponse({ connected: dropbox })
       if (url.startsWith('/api/google/status')) return jsonResponse({ connected: google })
+      if (url.startsWith('/api/destinations')) return jsonResponse({ destinations: [] })
       return jsonResponse({})
     }),
   )
@@ -222,9 +223,10 @@ describe('App', () => {
     })
   })
 
-  // The right-side panel from docs/IDEAS.md's Pending item 1 -- dummy data
-  // only for now (components/DestinationsPanel.test.tsx covers its content
-  // in isolation); this just checks the toolbar toggle wires up to it.
+  // The right-side panel from docs/IDEAS.md's Pending item 1 -- its content
+  // (real, fetched destinations; still-dummy channels) is covered in
+  // isolation by components/DestinationsPanel.test.tsx; this just checks the
+  // toolbar toggle wires up to it.
   it('toggles the channels/destinations panel via the toolbar button', async () => {
     render(<App />)
     await screen.findByRole('textbox')

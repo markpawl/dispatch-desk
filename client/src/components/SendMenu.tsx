@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
+import { destinationLabel, type SavedDestination } from '../lib/destinations'
 
 interface FileSummary {
   // For Google Docs this is the doc id; for Dropbox it's the file path.
@@ -8,20 +9,12 @@ interface FileSummary {
   name: string
 }
 
-type SavedDestination =
-  | { id: string; type: 'google-doc'; docId: string; docName: string; createdAt: string }
-  | { id: string; type: 'dropbox-file'; path: string; name: string; createdAt: string }
-
 type SendTarget =
   | { kind: 'google-doc'; docId: string; docName: string }
   | { kind: 'dropbox-file'; path: string; name: string }
 
 interface SendMenuProps {
   editor: Editor | null
-}
-
-function destinationLabel(destination: SavedDestination): string {
-  return destination.type === 'google-doc' ? destination.docName : destination.name
 }
 
 function destinationTarget(destination: SavedDestination): SendTarget {

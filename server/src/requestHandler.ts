@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   type Destination,
+  deleteDestination,
   getDestination,
   listDestinations,
   saveDropboxFileDestination,
@@ -456,6 +457,27 @@ export function createRequestHandler(clientDistDir: string) {
           console.error('[destinations] list failed', error)
           res.writeHead(500, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: 'Failed to list destinations' }))
+        })
+      return
+    }
+
+    if (url.pathname.startsWith('/api/destinations/')) {
+      if (req.method !== 'DELETE') {
+        res.writeHead(405, { 'Content-Type': 'text/plain' }).end('Method not allowed')
+        return
+      }
+      const user = await requireUser(req, res)
+      if (!user) return
+      const id = decodeURIComponent(url.pathname.slice('/api/destinations/'.length))
+      deleteDestination(user.id, id)
+        .then(() => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true }))
+        })
+        .catch((error: unknown) => {
+          console.error('[destinations] delete failed', error)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Failed to delete destination' }))
         })
       return
     }

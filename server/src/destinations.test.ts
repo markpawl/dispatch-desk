@@ -10,8 +10,13 @@ vi.mock('./redisClient.js', () => ({
   }),
 }))
 
-const { listDestinations, getDestination, saveGoogleDocDestination, saveDropboxFileDestination } =
-  await import('./destinations.js')
+const {
+  listDestinations,
+  getDestination,
+  saveGoogleDocDestination,
+  saveDropboxFileDestination,
+  deleteDestination,
+} = await import('./destinations.js')
 
 describe('destinations', () => {
   beforeEach(() => {
@@ -75,5 +80,33 @@ describe('destinations', () => {
     const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md')
     expect(await listDestinations('user-1')).toEqual([doc, file])
     expect(await getDestination('user-1', file.id)).toEqual(file)
+  })
+
+  it('deletes a destination by id, leaving the rest untouched', async () => {
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
+    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md')
+
+    await deleteDestination('user-1', doc.id)
+
+    expect(await listDestinations('user-1')).toEqual([file])
+    expect(await getDestination('user-1', doc.id)).toBeUndefined()
+  })
+
+  it('deleting an id that does not exist is a no-op, not an error', async () => {
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
+
+    await expect(deleteDestination('user-1', 'does-not-exist')).resolves.toBeUndefined()
+
+    expect(await listDestinations('user-1')).toEqual([doc])
+  })
+
+  it('deleting only affects the given user\'s list', async () => {
+    const mine = await saveGoogleDocDestination('user-1', 'doc-1', 'Mine')
+    const theirs = await saveGoogleDocDestination('user-2', 'doc-2', 'Theirs')
+
+    await deleteDestination('user-2', theirs.id)
+
+    expect(await listDestinations('user-1')).toEqual([mine])
+    expect(await listDestinations('user-2')).toEqual([])
   })
 })

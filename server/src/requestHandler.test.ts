@@ -62,6 +62,7 @@ const mocks = vi.hoisted(() => {
     name,
     createdAt: 'now',
   })),
+  deleteDestination: vi.fn(async (_userId: string, _id: string) => undefined),
   appendSendLogEntry: vi.fn(async (_userId: string) => undefined),
   DropboxNotConnectedError,
   getDropboxAuthUrl: vi.fn(async () => 'https://www.dropbox.com/mock-consent-screen'),
@@ -105,6 +106,7 @@ vi.mock('./destinations.js', () => ({
   getDestination: mocks.getDestination,
   saveGoogleDocDestination: mocks.saveGoogleDocDestination,
   saveDropboxFileDestination: mocks.saveDropboxFileDestination,
+  deleteDestination: mocks.deleteDestination,
 }))
 vi.mock('./dropboxAuth.js', () => ({
   getDropboxAuthUrl: mocks.getDropboxAuthUrl,
@@ -257,6 +259,7 @@ describe('requestHandler', () => {
       ['POST', '/api/dropbox/disconnect'],
       ['GET', '/api/dropbox/search?q=x'],
       ['GET', '/api/destinations'],
+      ['DELETE', '/api/destinations/dest-1'],
       ['POST', '/api/send'],
     ])('%s %s is 401 when signed out', async (method, path) => {
       mocks.getSessionUser.mockResolvedValueOnce(null)
@@ -424,6 +427,27 @@ describe('requestHandler', () => {
       destinations: [
         { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
       ],
+    })
+  })
+
+  describe('DELETE /api/destinations/:id', () => {
+    it('deletes the destination for the signed-in user', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations/dest-1`, { method: 'DELETE' })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ ok: true })
+      expect(mocks.deleteDestination).toHaveBeenCalledWith('user-1', 'dest-1')
+    })
+
+    it('rejects non-DELETE methods with 405', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations/dest-1`, { method: 'GET' })
+      expect(response.status).toBe(405)
+      expect(mocks.deleteDestination).not.toHaveBeenCalled()
+    })
+
+    it('500s if the delete fails', async () => {
+      mocks.deleteDestination.mockRejectedValueOnce(new Error('redis down'))
+      const response = await fetch(`${baseUrl}/api/destinations/dest-1`, { method: 'DELETE' })
+      expect(response.status).toBe(500)
     })
   })
 
