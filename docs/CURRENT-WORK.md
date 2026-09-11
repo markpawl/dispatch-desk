@@ -50,12 +50,14 @@ _(Done: commit `5df267b`. Also extracted `client/src/lib/destinations.ts` — th
 type + `destinationLabel` helper, shared between `DestinationsPanel.tsx` and `SendMenu.tsx` instead
 of duplicated. Tests + lint + typecheck + build all green.)_
 
-**Group B — Gmail send capability (server only)**
-- [ ] `server/src/googleAuth.ts` — add `gmail.send` to `GOOGLE_SCOPES` (existing connections need
+**Group B — Gmail send capability (server only)** ✅
+- [x] `server/src/googleAuth.ts` — add `gmail.send` to `GOOGLE_SCOPES` (existing connections need
       to reconnect once to pick up the new scope)
-- [ ] `server/src/gmail.ts` (new, mirrors `googleDocs.ts`) — `sendEmail(userId, to, subject,
+- [x] `server/src/gmail.ts` (new, mirrors `googleDocs.ts`) — `sendEmail(userId, to, subject,
       body)` via the Gmail API, reusing `getAuthorizedClient`
-- [ ] `server/src/gmail.test.ts` (new)
+- [x] `server/src/gmail.test.ts` (new)
+
+_(Done: commit `518c9e4`. Tests + lint + typecheck + build all green.)_
 
 **Group C — Email destination type + daily subject sequence**
 - [ ] `server/src/destinations.ts` — `EmailDestination { id, type: 'email', address, shortLabel,
