@@ -33,8 +33,18 @@ describe('destinations', () => {
   })
 
   it('saves a new google-doc destination under the user key', async () => {
-    const destination = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
-    expect(destination).toMatchObject({ type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes' })
+    const destination = await saveGoogleDocDestination(
+      'user-1',
+      'doc-1',
+      'Meeting Notes',
+      'Notes',
+    )
+    expect(destination).toMatchObject({
+      type: 'google-doc',
+      docId: 'doc-1',
+      docName: 'Meeting Notes',
+      shortLabel: 'Notes',
+    })
     expect(destination.id).toBeTruthy()
     expect(destination.createdAt).toBeTruthy()
     expect(await listDestinations('user-1')).toEqual([destination])
@@ -42,50 +52,65 @@ describe('destinations', () => {
   })
 
   it('upserts by docId rather than creating a duplicate', async () => {
-    const first = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
-    const second = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes (renamed, ignored)')
-    expect(second).toEqual(first) // same entry, name from the first save wins
+    const first = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes', 'Notes')
+    const second = await saveGoogleDocDestination(
+      'user-1',
+      'doc-1',
+      'Meeting Notes (renamed, ignored)',
+      'Renamed, ignored',
+    )
+    expect(second).toEqual(first) // same entry, name/shortLabel from the first save win
     expect(await listDestinations('user-1')).toHaveLength(1)
   })
 
   it('saves distinct destinations for distinct docIds', async () => {
-    await saveGoogleDocDestination('user-1', 'doc-1', 'Notes')
-    await saveGoogleDocDestination('user-1', 'doc-2', 'Journal')
+    await saveGoogleDocDestination('user-1', 'doc-1', 'Notes', 'Notes')
+    await saveGoogleDocDestination('user-1', 'doc-2', 'Journal', 'Journal')
     expect(await listDestinations('user-1')).toHaveLength(2)
   })
 
   it('getDestination finds a saved destination by id, undefined otherwise', async () => {
-    const saved = await saveGoogleDocDestination('user-1', 'doc-1', 'Notes')
+    const saved = await saveGoogleDocDestination('user-1', 'doc-1', 'Notes', 'Notes')
     expect(await getDestination('user-1', saved.id)).toEqual(saved)
     expect(await getDestination('user-1', 'does-not-exist')).toBeUndefined()
   })
 
   it('keeps each user\'s destinations separate', async () => {
-    const mine = await saveGoogleDocDestination('user-1', 'doc-1', 'Mine')
-    await saveGoogleDocDestination('user-2', 'doc-2', 'Theirs')
+    const mine = await saveGoogleDocDestination('user-1', 'doc-1', 'Mine', 'Mine')
+    await saveGoogleDocDestination('user-2', 'doc-2', 'Theirs', 'Theirs')
 
     expect(await listDestinations('user-1')).toEqual([mine])
     expect(await getDestination('user-2', mine.id)).toBeUndefined()
   })
 
   it('saves a dropbox-file destination and upserts it by path', async () => {
-    const first = await saveDropboxFileDestination('user-1', '/notes.txt', 'notes.txt')
-    expect(first).toMatchObject({ type: 'dropbox-file', path: '/notes.txt', name: 'notes.txt' })
-    const second = await saveDropboxFileDestination('user-1', '/notes.txt', 'renamed.txt')
+    const first = await saveDropboxFileDestination('user-1', '/notes.txt', 'notes.txt', 'Notes')
+    expect(first).toMatchObject({
+      type: 'dropbox-file',
+      path: '/notes.txt',
+      name: 'notes.txt',
+      shortLabel: 'Notes',
+    })
+    const second = await saveDropboxFileDestination(
+      'user-1',
+      '/notes.txt',
+      'renamed.txt',
+      'Renamed',
+    )
     expect(second).toEqual(first)
     expect(await listDestinations('user-1')).toHaveLength(1)
   })
 
   it('google-doc and dropbox-file destinations coexist in one list', async () => {
-    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
-    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md')
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes', 'Notes')
+    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md', 'Journal')
     expect(await listDestinations('user-1')).toEqual([doc, file])
     expect(await getDestination('user-1', file.id)).toEqual(file)
   })
 
   it('deletes a destination by id, leaving the rest untouched', async () => {
-    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
-    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md')
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes', 'Notes')
+    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md', 'Journal')
 
     await deleteDestination('user-1', doc.id)
 
@@ -94,7 +119,7 @@ describe('destinations', () => {
   })
 
   it('deleting an id that does not exist is a no-op, not an error', async () => {
-    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes', 'Notes')
 
     await expect(deleteDestination('user-1', 'does-not-exist')).resolves.toBeUndefined()
 
@@ -102,8 +127,8 @@ describe('destinations', () => {
   })
 
   it('deleting only affects the given user\'s list', async () => {
-    const mine = await saveGoogleDocDestination('user-1', 'doc-1', 'Mine')
-    const theirs = await saveGoogleDocDestination('user-2', 'doc-2', 'Theirs')
+    const mine = await saveGoogleDocDestination('user-1', 'doc-1', 'Mine', 'Mine')
+    const theirs = await saveGoogleDocDestination('user-2', 'doc-2', 'Theirs', 'Theirs')
 
     await deleteDestination('user-2', theirs.id)
 
@@ -142,8 +167,8 @@ describe('destinations', () => {
   })
 
   it('all three destination types coexist in one list', async () => {
-    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes')
-    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md')
+    const doc = await saveGoogleDocDestination('user-1', 'doc-1', 'Meeting Notes', 'Notes')
+    const file = await saveDropboxFileDestination('user-1', '/journal.md', 'journal.md', 'Journal')
     const email = await saveEmailDestination('user-1', 'to@example.com', 'Weekly Notes')
     expect(await listDestinations('user-1')).toEqual([doc, file, email])
   })

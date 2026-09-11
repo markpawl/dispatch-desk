@@ -189,52 +189,52 @@ async function resolveTarget(userId: string, body: SendRequestBody): Promise<Sen
 // obviously-wrong inputs without rejecting anything a real address could be.
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-interface CreateEmailDestinationBody {
-  type: 'email'
-  address: string
-  shortLabel: string
-  emailSubjectLabel?: string
-}
-
-// POST /api/destinations only creates 'email' destinations for now --
-// google-doc/dropbox-file are still created as a send side-effect (Group D
-// per docs/CURRENT-WORK.md moves them to this endpoint too).
-function parseCreateDestinationBody(body: unknown): CreateEmailDestinationBody {
-  if (typeof body !== 'object' || body === null) throw new BadRequestError('Expected a JSON body')
-  const { type, address, shortLabel, emailSubjectLabel } = body as Record<string, unknown>
-  if (type !== 'email') {
-    throw new BadRequestError('Only "email" destinations can be created here for now')
-  }
-  if (typeof address !== 'string' || !EMAIL_FORMAT.test(address.trim())) {
-    throw new BadRequestError('"address" must be a valid email address')
-  }
+function requireShortLabel(shortLabel: unknown): string {
   if (typeof shortLabel !== 'string' || shortLabel.trim() === '') {
     throw new BadRequestError('"shortLabel" is required')
   }
-  const trimmedSubjectLabel =
-    typeof emailSubjectLabel === 'string' && emailSubjectLabel.trim() !== ''
-      ? emailSubjectLabel.trim()
-      : undefined
-  return {
-    type: 'email',
-    address: address.trim(),
-    shortLabel: shortLabel.trim(),
-    emailSubjectLabel: trimmedSubjectLabel,
-  }
+  return shortLabel.trim()
 }
 
-// The send log's display name for a destination -- each type names itself
-// differently until shortLabel is added to google-doc/dropbox-file too
-// (Group D per docs/CURRENT-WORK.md).
-function destinationLogName(destination: Destination): string {
-  switch (destination.type) {
-    case 'google-doc':
-      return destination.docName
-    case 'dropbox-file':
-      return destination.name
-    case 'email':
-      return destination.shortLabel
+type CreateDestinationBody =
+  | { type: 'email'; address: string; shortLabel: string; emailSubjectLabel?: string }
+  | { type: 'google-doc'; docId: string; docName: string; shortLabel: string }
+  | { type: 'dropbox-file'; path: string; name: string; shortLabel: string }
+
+// POST /api/destinations -- creates a destination directly, decoupled from
+// sending (contrast with the still-active send-side-effect creation in
+// /api/send below, which Group D4 per docs/CURRENT-WORK.md removes).
+function parseCreateDestinationBody(body: unknown): CreateDestinationBody {
+  if (typeof body !== 'object' || body === null) throw new BadRequestError('Expected a JSON body')
+  const { type, address, shortLabel, emailSubjectLabel, docId, docName, path, name } =
+    body as Record<string, unknown>
+
+  if (type === 'email') {
+    if (typeof address !== 'string' || !EMAIL_FORMAT.test(address.trim())) {
+      throw new BadRequestError('"address" must be a valid email address')
+    }
+    const trimmedSubjectLabel =
+      typeof emailSubjectLabel === 'string' && emailSubjectLabel.trim() !== ''
+        ? emailSubjectLabel.trim()
+        : undefined
+    return {
+      type: 'email',
+      address: address.trim(),
+      shortLabel: requireShortLabel(shortLabel),
+      emailSubjectLabel: trimmedSubjectLabel,
+    }
   }
+  if (type === 'google-doc') {
+    if (typeof docId !== 'string' || !docId) throw new BadRequestError('"docId" is required')
+    if (typeof docName !== 'string' || !docName) throw new BadRequestError('"docName" is required')
+    return { type: 'google-doc', docId, docName, shortLabel: requireShortLabel(shortLabel) }
+  }
+  if (type === 'dropbox-file') {
+    if (typeof path !== 'string' || !path) throw new BadRequestError('"path" is required')
+    if (typeof name !== 'string' || !name) throw new BadRequestError('"name" is required')
+    return { type: 'dropbox-file', path, name, shortLabel: requireShortLabel(shortLabel) }
+  }
+  throw new BadRequestError('"type" must be "email", "google-doc", or "dropbox-file"')
 }
 
 // Pulled out of index.ts so it's testable without booting the whole app --
@@ -536,12 +536,27 @@ export function createRequestHandler(clientDistDir: string) {
         readJsonBody(req)
           .then(async (body) => {
             const parsed = parseCreateDestinationBody(body)
-            const destination = await saveEmailDestination(
-              user.id,
-              parsed.address,
-              parsed.shortLabel,
-              parsed.emailSubjectLabel,
-            )
+            const destination: Destination =
+              parsed.type === 'email'
+                ? await saveEmailDestination(
+                    user.id,
+                    parsed.address,
+                    parsed.shortLabel,
+                    parsed.emailSubjectLabel,
+                  )
+                : parsed.type === 'google-doc'
+                  ? await saveGoogleDocDestination(
+                      user.id,
+                      parsed.docId,
+                      parsed.docName,
+                      parsed.shortLabel,
+                    )
+                  : await saveDropboxFileDestination(
+                      user.id,
+                      parsed.path,
+                      parsed.name,
+                      parsed.shortLabel,
+                    )
             res.writeHead(200, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ ok: true, destination }))
           })
@@ -607,11 +622,24 @@ export function createRequestHandler(clientDistDir: string) {
           switch (target.provider) {
             case 'google-doc':
               await appendTextToDoc(user.id, target.docId, parsed.text)
-              destination = await saveGoogleDocDestination(user.id, target.docId, target.docName)
+              // shortLabel defaults to docName here -- this ad-hoc creation
+              // path goes away in Group D4 per docs/CURRENT-WORK.md, once
+              // DestinationForm (Group D2) is the only way to create one.
+              destination = await saveGoogleDocDestination(
+                user.id,
+                target.docId,
+                target.docName,
+                target.docName,
+              )
               break
             case 'dropbox-file':
               await appendTextToDropboxFile(user.id, target.path, parsed.text)
-              destination = await saveDropboxFileDestination(user.id, target.path, target.name)
+              destination = await saveDropboxFileDestination(
+                user.id,
+                target.path,
+                target.name,
+                target.name,
+              )
               break
             case 'email': {
               if (!parsed.localDate || !parsed.localTime) {
@@ -630,7 +658,7 @@ export function createRequestHandler(clientDistDir: string) {
           }
           await appendSendLogEntry(user.id, {
             destinationId: destination.id,
-            docName: destinationLogName(destination),
+            docName: destination.shortLabel,
             textPreview: truncateForPreview(parsed.text),
           })
           res.writeHead(200, { 'Content-Type': 'application/json' })

@@ -27,15 +27,36 @@ const mocks = vi.hoisted(() => {
   ]),
   appendTextToDoc: vi.fn(async (_userId: string, _docId: string, _text: string) => undefined),
   listDestinations: vi.fn(async (_userId: string) => [
-    { id: 'dest-1', type: 'google-doc' as const, docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+    {
+      id: 'dest-1',
+      type: 'google-doc' as const,
+      docId: 'doc-1',
+      docName: 'Meeting Notes',
+      shortLabel: 'Meeting Notes',
+      createdAt: 'now',
+    },
   ]),
   getDestination: vi.fn(
     async (
       _userId: string,
       id: string,
     ): Promise<
-      | { id: string; type: 'google-doc'; docId: string; docName: string; createdAt: string }
-      | { id: string; type: 'dropbox-file'; path: string; name: string; createdAt: string }
+      | {
+          id: string
+          type: 'google-doc'
+          docId: string
+          docName: string
+          shortLabel: string
+          createdAt: string
+        }
+      | {
+          id: string
+          type: 'dropbox-file'
+          path: string
+          name: string
+          shortLabel: string
+          createdAt: string
+        }
       | {
           id: string
           type: 'email'
@@ -52,6 +73,7 @@ const mocks = vi.hoisted(() => {
           type: 'google-doc',
           docId: 'doc-1',
           docName: 'Meeting Notes',
+          shortLabel: 'Meeting Notes',
           createdAt: 'now',
         }
       }
@@ -86,20 +108,26 @@ const mocks = vi.hoisted(() => {
   sendEmail: vi.fn(
     async (_userId: string, _to: string, _subject: string, _body: string) => undefined,
   ),
-  saveGoogleDocDestination: vi.fn(async (_userId: string, docId: string, docName: string) => ({
-    id: 'dest-new',
-    type: 'google-doc' as const,
-    docId,
-    docName,
-    createdAt: 'now',
-  })),
-  saveDropboxFileDestination: vi.fn(async (_userId: string, path: string, name: string) => ({
-    id: 'dest-dbx',
-    type: 'dropbox-file' as const,
-    path,
-    name,
-    createdAt: 'now',
-  })),
+  saveGoogleDocDestination: vi.fn(
+    async (_userId: string, docId: string, docName: string, shortLabel: string) => ({
+      id: 'dest-new',
+      type: 'google-doc' as const,
+      docId,
+      docName,
+      shortLabel,
+      createdAt: 'now',
+    }),
+  ),
+  saveDropboxFileDestination: vi.fn(
+    async (_userId: string, path: string, name: string, shortLabel: string) => ({
+      id: 'dest-dbx',
+      type: 'dropbox-file' as const,
+      path,
+      name,
+      shortLabel,
+      createdAt: 'now',
+    }),
+  ),
   deleteDestination: vi.fn(async (_userId: string, _id: string) => undefined),
   appendSendLogEntry: vi.fn(async (_userId: string) => undefined),
   DropboxNotConnectedError,
@@ -467,7 +495,14 @@ describe('requestHandler', () => {
     const response = await fetch(`${baseUrl}/api/destinations`)
     expect(await response.json()).toEqual({
       destinations: [
-        { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+        {
+          id: 'dest-1',
+          type: 'google-doc',
+          docId: 'doc-1',
+          docName: 'Meeting Notes',
+          shortLabel: 'Meeting Notes',
+          createdAt: 'now',
+        },
       ],
     })
   })
@@ -532,7 +567,7 @@ describe('requestHandler', () => {
     it('400s for an unsupported type', async () => {
       const response = await fetch(`${baseUrl}/api/destinations`, {
         method: 'POST',
-        body: JSON.stringify({ type: 'google-doc', address: 'x' }),
+        body: JSON.stringify({ type: 'data-store-row', address: 'x' }),
       })
       expect(response.status).toBe(400)
       expect(mocks.saveEmailDestination).not.toHaveBeenCalled()
@@ -553,6 +588,66 @@ describe('requestHandler', () => {
       })
       expect(response.status).toBe(400)
     })
+
+    it('creates a google-doc destination', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'google-doc',
+          docId: 'doc-1',
+          docName: 'Meeting Notes',
+          shortLabel: 'Notes',
+        }),
+      })
+      expect(response.status).toBe(200)
+      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith(
+        'user-1',
+        'doc-1',
+        'Meeting Notes',
+        'Notes',
+      )
+      const body = (await response.json()) as { destination: { type: string } }
+      expect(body.destination.type).toBe('google-doc')
+    })
+
+    it('400s a google-doc create missing docId/docName', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'google-doc', shortLabel: 'Notes' }),
+      })
+      expect(response.status).toBe(400)
+      expect(mocks.saveGoogleDocDestination).not.toHaveBeenCalled()
+    })
+
+    it('creates a dropbox-file destination', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'dropbox-file',
+          path: '/journal.md',
+          name: 'journal.md',
+          shortLabel: 'Journal',
+        }),
+      })
+      expect(response.status).toBe(200)
+      expect(mocks.saveDropboxFileDestination).toHaveBeenCalledWith(
+        'user-1',
+        '/journal.md',
+        'journal.md',
+        'Journal',
+      )
+      const body = (await response.json()) as { destination: { type: string } }
+      expect(body.destination.type).toBe('dropbox-file')
+    })
+
+    it('400s a dropbox-file create missing path/name', async () => {
+      const response = await fetch(`${baseUrl}/api/destinations`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'dropbox-file', shortLabel: 'Journal' }),
+      })
+      expect(response.status).toBe(400)
+      expect(mocks.saveDropboxFileDestination).not.toHaveBeenCalled()
+    })
   })
 
   describe('POST /api/send', () => {
@@ -562,7 +657,12 @@ describe('requestHandler', () => {
         body: JSON.stringify({ text: 'hello world', destinationId: 'dest-1' }),
       })
       expect(mocks.appendTextToDoc).toHaveBeenCalledWith('user-1', 'doc-1', 'hello world')
-      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('user-1', 'doc-1', 'Meeting Notes')
+      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith(
+        'user-1',
+        'doc-1',
+        'Meeting Notes',
+        'Meeting Notes',
+      )
       expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
         'user-1',
         expect.objectContaining({ docName: 'Meeting Notes', textPreview: 'hello world' }),
@@ -578,7 +678,12 @@ describe('requestHandler', () => {
         body: JSON.stringify({ text: 'hi', docId: 'doc-2', docName: 'Journal' }),
       })
       expect(mocks.appendTextToDoc).toHaveBeenCalledWith('user-1', 'doc-2', 'hi')
-      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith('user-1', 'doc-2', 'Journal')
+      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith(
+        'user-1',
+        'doc-2',
+        'Journal',
+        'Journal',
+      )
       expect(response.status).toBe(200)
     })
 
@@ -591,6 +696,7 @@ describe('requestHandler', () => {
       expect(mocks.saveDropboxFileDestination).toHaveBeenCalledWith(
         'user-1',
         '/journal.md',
+        'journal.md',
         'journal.md',
       )
       expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
@@ -607,6 +713,7 @@ describe('requestHandler', () => {
         type: 'dropbox-file' as const,
         path: '/saved.txt',
         name: 'saved.txt',
+        shortLabel: 'saved.txt',
         createdAt: 'now',
       })
       const response = await fetch(`${baseUrl}/api/send`, {

@@ -11,6 +11,9 @@ export interface GoogleDocDestination {
   type: 'google-doc'
   docId: string
   docName: string
+  // The list-display label -- see EmailDestination's shortLabel below for
+  // why it's separate from docName (the actual Google Doc's real name).
+  shortLabel: string
   createdAt: string
 }
 
@@ -19,6 +22,7 @@ export interface DropboxFileDestination {
   type: 'dropbox-file'
   path: string
   name: string
+  shortLabel: string
   createdAt: string
 }
 
@@ -67,10 +71,14 @@ export async function getDestination(
 // Upserts by docId -- sending to the same Google Doc twice reuses the
 // existing saved destination (so the client's "saved destinations" list
 // doesn't accumulate duplicates) rather than creating a new entry each time.
+// `shortLabel` (like docName/name) is only used for a genuinely new entry --
+// the existing one's label from its first save wins, same as docName always
+// has.
 export async function saveGoogleDocDestination(
   userId: string,
   docId: string,
   docName: string,
+  shortLabel: string,
 ): Promise<GoogleDocDestination> {
   const destinations = await loadAll(userId)
   const existing = destinations.find(
@@ -83,6 +91,7 @@ export async function saveGoogleDocDestination(
     type: 'google-doc',
     docId,
     docName,
+    shortLabel,
     createdAt: new Date().toISOString(),
   }
   await saveAll(userId, [...destinations, destination])
@@ -104,6 +113,7 @@ export async function saveDropboxFileDestination(
   userId: string,
   path: string,
   name: string,
+  shortLabel: string,
 ): Promise<DropboxFileDestination> {
   const destinations = await loadAll(userId)
   const existing = destinations.find(
@@ -116,6 +126,7 @@ export async function saveDropboxFileDestination(
     type: 'dropbox-file',
     path,
     name,
+    shortLabel,
     createdAt: new Date().toISOString(),
   }
   await saveAll(userId, [...destinations, destination])

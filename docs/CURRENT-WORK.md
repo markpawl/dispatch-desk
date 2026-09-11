@@ -76,27 +76,47 @@ _(Done: commit `518c9e4`. Tests + lint + typecheck + build all green.)_
 
 _(Done: commit `0c3fd7a`. Tests + lint + typecheck + build all green.)_
 
-**Group D — DestinationsPanel creation flow (all three channels) + SendMenu rework**
-- [ ] New shared form component `client/src/components/DestinationForm.tsx`: channel picker →
-      per-channel creation form → Save inserts the new destination into the list. A "start with
-      existing" dropdown (same-type destinations) prefills the form's fields, editable before
-      Save. Every channel's form has a `shortLabel` field (Google Doc/Dropbox default it to the
-      picked file's real name, editable; Email has no natural default).
-  - Google Doc form: embeds the existing search-and-pick widget as its parameter entry
-  - Dropbox form: same, with Dropbox search
+Group D is broken into four sequential sub-steps, ordered so each stays safe/shippable on its
+own: add new backend capability (D1) → add new UI using it (D2) → remove old UI now that it's
+replaced (D3) → remove old backend now that nothing needs it (D4).
+
+**Group D1 — Server: `POST /api/destinations` for Google Doc / Dropbox creation**
+- [ ] `server/src/destinations.ts` — add `shortLabel` to `GoogleDocDestination`/
+      `DropboxFileDestination`; `saveGoogleDocDestination`/`saveDropboxFileDestination` take a
+      `shortLabel` param
+- [ ] `server/src/requestHandler.ts` — `parseCreateDestinationBody` extended for `type:
+      'google-doc'` (`docId`, `docName`, `shortLabel`) and `type: 'dropbox-file'` (`path`, `name`,
+      `shortLabel`); `POST /api/destinations` calls the right save function. The still-active
+      ad-hoc-send-creates-destination path passes `docName`/`name` as a stand-in `shortLabel`
+      until D4 removes that path.
+- [ ] Test updates: `destinations.test.ts`, `requestHandler.test.ts`
+
+**Group D2 — Client: `DestinationForm.tsx` + wire into `DestinationsPanel`**
+- [ ] New `client/src/components/DestinationForm.tsx`: channel picker (Email / Google Doc /
+      Dropbox) → per-channel form → Save (calls `POST /api/destinations`, appends to the list). A
+      "start with existing" dropdown (same-type destinations) prefills fields, editable before
+      Save.
   - Email form: `address` + `shortLabel` + optional `emailSubjectLabel`
-- [ ] `server/src/requestHandler.ts` — `POST /api/destinations` extended for `google-doc` /
-      `dropbox-file` creation (today they're only created as a send side-effect); `/api/send`
-      simplified to `destinationId`-only (drop the ad-hoc `docId`/`dropboxPath` fields)
+  - Google Doc form: search-and-pick widget (moved from `SendMenu.tsx`) + editable `shortLabel`
+    (defaults to the picked doc's name)
+  - Dropbox form: same, with Dropbox search
 - [ ] `client/src/components/DestinationsPanel.tsx` — clicking a channel opens `DestinationForm`
       for it
-- [ ] `client/src/components/SendMenu.tsx` reworked:
-  - Destinations already exist → plain saved-destinations picker (search UI removed)
-  - No destinations exist yet → clicking "Send" opens `DestinationForm` (channel picker first);
-    on Save, the new destination is inserted into the list and a "Send from \<shortLabel\>"
-    button appears to dispatch immediately
-- [ ] Test updates: `SendMenu.test.tsx`, `DestinationsPanel.test.tsx`, `requestHandler.test.ts`,
-      `destinations.test.ts`
+- [ ] Test updates: `DestinationForm.test.tsx` (new), `DestinationsPanel.test.tsx`
+
+**Group D3 — Client: `SendMenu.tsx` rework**
+- [ ] Remove the now-redundant Google Docs/Dropbox search UI (moved to `DestinationForm` in D2)
+      — becomes a plain saved-destinations picker
+- [ ] No destinations yet → clicking "Send" opens `DestinationForm` (channel picker first); on
+      Save, the new destination is inserted and a "Send from \<shortLabel\>" button appears to
+      dispatch immediately
+- [ ] Test updates: `SendMenu.test.tsx`
+
+**Group D4 — Server: simplify `/api/send` to `destinationId`-only**
+- [ ] `server/src/requestHandler.ts` — drop the ad-hoc `docId`/`docName`/`dropboxPath`/
+      `dropboxName` fields from `parseSendBody`/`resolveTarget`/`SendTarget` (only `destinationId`
+      remains, matching how email already works)
+- [ ] Test updates: `requestHandler.test.ts` (remove/adjust the ad-hoc-send tests)
 
 **Group E — Docs reconciliation**
 - [ ] Update `docs/REQUIREMENTS.md`'s Send flow / Destination sidebar sections to reflect what's
