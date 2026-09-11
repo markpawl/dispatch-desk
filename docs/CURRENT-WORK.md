@@ -94,18 +94,26 @@ replaced (D3) → remove old backend now that nothing needs it (D4).
 _(Done: commit `7cf391a`. Also dropped the now-redundant `destinationLogName` helper in favor of
 `destination.shortLabel` directly. Tests + lint + typecheck + build all green.)_
 
-**Group D2 — Client: `DestinationForm.tsx` + wire into `DestinationsPanel`**
-- [ ] New `client/src/components/DestinationForm.tsx`: channel picker (Email / Google Doc /
+**Group D2 — Client: `DestinationForm.tsx` + wire into `DestinationsPanel`** ✅
+- [x] New `client/src/components/DestinationForm.tsx`: channel picker (Email / Google Doc /
       Dropbox) → per-channel form → Save (calls `POST /api/destinations`, appends to the list). A
-      "start with existing" dropdown (same-type destinations) prefills fields, editable before
-      Save.
+      "start with existing" *button* reveals a dropdown (same-type destinations) that prefills
+      fields, still editable before Save.
   - Email form: `address` + `shortLabel` + optional `emailSubjectLabel`
-  - Google Doc form: search-and-pick widget (moved from `SendMenu.tsx`) + editable `shortLabel`
-    (defaults to the picked doc's name)
+  - Google Doc form: its own search-and-pick widget (parallels `SendMenu.tsx`'s, not literally
+    moved yet -- D3 removes SendMenu's copy) + editable `shortLabel` (defaults to the picked
+    doc's name)
   - Dropbox form: same, with Dropbox search
-- [ ] `client/src/components/DestinationsPanel.tsx` — clicking a channel opens `DestinationForm`
-      for it
-- [ ] Test updates: `DestinationForm.test.tsx` (new), `DestinationsPanel.test.tsx`
+- [x] `client/src/components/DestinationsPanel.tsx` — clicking a channel opens `DestinationForm`
+      for it; its Channels list is now the three real types (was still placeholder before)
+- [x] Test updates: `DestinationForm.test.tsx` (new), `DestinationsPanel.test.tsx`
+
+_(Done: commit `f4cffd0`. Also: extended `client/src/lib/destinations.ts`'s `SavedDestination` type
+with `email` + `shortLabel` on every variant (needed for the template picker), which required a
+small `SendMenu.tsx` fix -- its saved-destinations list now sends by `destinationId` uniformly
+(previously reconstructed ad-hoc `docId`/`dropboxPath` fields from the saved object), with a new
+`client/src/lib/localSendTime.ts` helper for the `localDate`/`localTime` fields email destinations
+need. Tests + lint + typecheck + build all green.)_
 
 **Group D3 — Client: `SendMenu.tsx` rework**
 - [ ] Remove the now-redundant Google Docs/Dropbox search UI (moved to `DestinationForm` in D2)
