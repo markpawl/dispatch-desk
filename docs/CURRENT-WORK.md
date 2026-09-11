@@ -126,11 +126,16 @@ need. Tests + lint + typecheck + build all green.)_
 _(Done: commit `8bad413`. Canceling the empty-state create form closes the popover entirely (no
 picker/list left to fall back to). Tests + lint + typecheck + build all green.)_
 
-**Group D4 — Server: simplify `/api/send` to `destinationId`-only**
-- [ ] `server/src/requestHandler.ts` — drop the ad-hoc `docId`/`docName`/`dropboxPath`/
+**Group D4 — Server: simplify `/api/send` to `destinationId`-only** ✅
+- [x] `server/src/requestHandler.ts` — drop the ad-hoc `docId`/`docName`/`dropboxPath`/
       `dropboxName` fields from `parseSendBody`/`resolveTarget`/`SendTarget` (only `destinationId`
       remains, matching how email already works)
-- [ ] Test updates: `requestHandler.test.ts` (remove/adjust the ad-hoc-send tests)
+- [x] Test updates: `requestHandler.test.ts` (remove/adjust the ad-hoc-send tests)
+
+_(Done: commit `32fd76b`. Also removed the now-unneeded `SendTarget` type/`resolveTarget` function
+entirely, and the save\*Destination upsert calls inside `/api/send` (nothing left to upsert --
+every send is to an already-existing destination). Tests + lint + typecheck + build all green.
+Group D (all sub-steps D1-D4) is now fully done.)_
 
 **Group E — Docs reconciliation**
 - [ ] Update `docs/REQUIREMENTS.md`'s Send flow / Destination sidebar sections to reflect what's
