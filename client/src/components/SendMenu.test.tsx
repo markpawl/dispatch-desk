@@ -130,7 +130,14 @@ describe('SendMenu', () => {
     stubFetch({
       google: true,
       destinations: [
-        { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+        {
+          id: 'dest-1',
+          type: 'google-doc',
+          docId: 'doc-1',
+          docName: 'Meeting Notes',
+          shortLabel: 'Meeting Notes',
+          createdAt: 'now',
+        },
       ],
       onSend: (init) => sent.push(init as RequestInit),
     })
@@ -139,11 +146,13 @@ describe('SendMenu', () => {
     const destinationButton = await screen.findByRole('button', { name: 'Meeting Notes' })
     await userEvent.click(destinationButton)
 
-    expect(JSON.parse(sent[0].body as string)).toEqual({
-      text: 'hello world',
-      docId: 'doc-1',
-      docName: 'Meeting Notes',
-    })
+    // Sends by id (regardless of destination type) -- localDate/localTime
+    // ride along too (only read server-side for an email destination, but
+    // harmless to always send).
+    const body = JSON.parse(sent[0].body as string) as Record<string, unknown>
+    expect(body).toMatchObject({ text: 'hello world', destinationId: 'dest-1' })
+    expect(body.localDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(body.localTime).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/)
     await waitFor(() => expect(capturedEditor?.getText()).toBe(''))
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Meeting Notes' })).not.toBeInTheDocument(),
@@ -200,7 +209,14 @@ describe('SendMenu', () => {
     stubFetch({
       google: true,
       destinations: [
-        { id: 'dest-1', type: 'google-doc', docId: 'doc-1', docName: 'Meeting Notes', createdAt: 'now' },
+        {
+          id: 'dest-1',
+          type: 'google-doc',
+          docId: 'doc-1',
+          docName: 'Meeting Notes',
+          shortLabel: 'Meeting Notes',
+          createdAt: 'now',
+        },
       ],
       send: { ok: false, body: { error: 'Google is not connected' } },
     })

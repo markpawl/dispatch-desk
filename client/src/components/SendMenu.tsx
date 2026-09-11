@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
 import { destinationLabel, type SavedDestination } from '../lib/destinations'
+import { localDateKey, localTimeLabel } from '../lib/localSendTime'
 
 interface FileSummary {
   // For Google Docs this is the doc id; for Dropbox it's the file path.
@@ -9,18 +10,16 @@ interface FileSummary {
   name: string
 }
 
-type SendTarget =
-  | { kind: 'google-doc'; docId: string; docName: string }
-  | { kind: 'dropbox-file'; path: string; name: string }
+// The three shapes /api/send accepts. A saved destination -- of any type,
+// email included -- always sends by id; localDate/localTime are read only
+// when it resolves to an email destination, but harmless to always include.
+type SendBody =
+  | { destinationId: string; localDate: string; localTime: string }
+  | { docId: string; docName: string }
+  | { dropboxPath: string; dropboxName: string }
 
 interface SendMenuProps {
   editor: Editor | null
-}
-
-function destinationTarget(destination: SavedDestination): SendTarget {
-  return destination.type === 'google-doc'
-    ? { kind: 'google-doc', docId: destination.docId, docName: destination.docName }
-    : { kind: 'dropbox-file', path: destination.path, name: destination.name }
 }
 
 // The "select text -> send to a destination" flow (see docs/REQUIREMENTS.md's
@@ -99,16 +98,11 @@ export function SendMenu({ editor }: SendMenuProps) {
       .finally(() => setDropboxSearching(false))
   }
 
-  const send = async (target: SendTarget) => {
+  const send = async (target: SendBody) => {
     if (!editor) return
     const { from, to } = editor.state.selection
     const text = editor.state.doc.textBetween(from, to, '\n')
     if (!text.trim()) return
-
-    const body =
-      target.kind === 'google-doc'
-        ? { text, docId: target.docId, docName: target.docName }
-        : { text, dropboxPath: target.path, dropboxName: target.name }
 
     setSending(true)
     setError(null)
@@ -116,7 +110,7 @@ export function SendMenu({ editor }: SendMenuProps) {
       const response = await fetch('/api/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ text, ...target }),
       })
       if (!response.ok) {
         const errorBody = (await response.json().catch(() => null)) as { error?: string } | null
@@ -160,7 +154,13 @@ export function SendMenu({ editor }: SendMenuProps) {
                   <button
                     type="button"
                     disabled={sending}
-                    onClick={() => send(destinationTarget(destination))}
+                    onClick={() =>
+                      send({
+                        destinationId: destination.id,
+                        localDate: localDateKey(),
+                        localTime: localTimeLabel(),
+                      })
+                    }
                   >
                     {destinationLabel(destination)}
                   </button>
@@ -194,7 +194,7 @@ export function SendMenu({ editor }: SendMenuProps) {
                     <button
                       type="button"
                       disabled={sending}
-                      onClick={() => send({ kind: 'google-doc', docId: doc.ref, docName: doc.name })}
+                      onClick={() => send({ docId: doc.ref, docName: doc.name })}
                     >
                       {doc.name}
                     </button>
@@ -229,7 +229,7 @@ export function SendMenu({ editor }: SendMenuProps) {
                     <button
                       type="button"
                       disabled={sending}
-                      onClick={() => send({ kind: 'dropbox-file', path: file.ref, name: file.name })}
+                      onClick={() => send({ dropboxPath: file.ref, dropboxName: file.name })}
                     >
                       {file.name}
                     </button>

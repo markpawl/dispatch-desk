@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react'
+import { type DestinationChannel, DestinationForm } from './DestinationForm'
 import { destinationLabel, type SavedDestination } from '../lib/destinations'
 
 interface Channel {
-  id: string
+  id: DestinationChannel
   name: string
 }
 
-// Placeholder -- clicking a channel to open a creation form is
-// docs/CURRENT-WORK.md's Group D, not built yet.
-const DUMMY_CHANNELS: Channel[] = [
+const CHANNELS: Channel[] = [
   { id: 'email', name: 'Email' },
-  { id: 'gdrive-folder', name: 'Google Drive folder' },
-  { id: 'data-store-row', name: 'Data store row' },
+  { id: 'google-doc', name: 'Google Doc' },
+  { id: 'dropbox-file', name: 'Dropbox File' },
 ]
 
 interface DestinationsPanelProps {
@@ -19,9 +18,9 @@ interface DestinationsPanelProps {
 }
 
 // The right-side panel from docs/REQUIREMENTS.md's Destination sidebar flow,
-// showing two lists -- channels (the available destination types, still
-// placeholder per the comment above) and destinations (the real, saved
-// instances, deletable here). See docs/CURRENT-WORK.md's Group A.
+// showing two lists -- channels (clicking one opens DestinationForm.tsx to
+// create a destination of that type, per docs/CURRENT-WORK.md's Group D2)
+// and destinations (the real, saved instances, deletable here per Group A).
 export function DestinationsPanel({ open }: DestinationsPanelProps) {
   const [destinations, setDestinations] = useState<SavedDestination[]>([])
   // The one destination (if any) currently showing its inline "delete this?"
@@ -29,6 +28,7 @@ export function DestinationsPanel({ open }: DestinationsPanelProps) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [formChannel, setFormChannel] = useState<DestinationChannel | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -59,15 +59,38 @@ export function DestinationsPanel({ open }: DestinationsPanelProps) {
       })
   }
 
+  const handleCreated = (destination: SavedDestination) => {
+    setDestinations((current) => [...current, destination])
+    setFormChannel(null)
+  }
+
   if (!open) return null
+
+  if (formChannel) {
+    return (
+      <aside className="destinations-panel" aria-label="Create a destination">
+        <h2>New {CHANNELS.find((channel) => channel.id === formChannel)?.name} destination</h2>
+        <DestinationForm
+          destinations={destinations}
+          initialChannel={formChannel}
+          onCreated={handleCreated}
+          onCancel={() => setFormChannel(null)}
+        />
+      </aside>
+    )
+  }
 
   return (
     <aside className="destinations-panel" aria-label="Channels and destinations">
       <section>
         <h2>Channels</h2>
         <ul>
-          {DUMMY_CHANNELS.map((channel) => (
-            <li key={channel.id}>{channel.name}</li>
+          {CHANNELS.map((channel) => (
+            <li key={channel.id}>
+              <button type="button" onClick={() => setFormChannel(channel.id)}>
+                {channel.name}
+              </button>
+            </li>
           ))}
         </ul>
       </section>

@@ -353,7 +353,7 @@
   right: 0;
   bottom: 0;
   z-index: 10;
-  width: 220px;
+  width: 270px;
   box-sizing: border-box;
   background: #fff;
   border: 1px solid #ccc;
@@ -400,6 +400,23 @@
   color: #888;
 }
 
+.destinations-panel li button:not(.destinations-panel-delete) {
+  flex: 1;
+  display: block;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.destinations-panel li button:not(.destinations-panel-delete):hover {
+  color: #1f6feb;
+}
+
 .destinations-panel-delete {
   flex: none;
   width: 1.4rem;
@@ -439,6 +456,91 @@
   border-radius: 4px;
   background: #fff;
   cursor: pointer;
+}
+
+/* The create-a-destination form (components/DestinationForm.tsx), rendered
+   inside .destinations-panel in place of its usual channels/destinations
+   lists once a channel is picked. */
+.destination-form-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.destination-form-channels button {
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  background: #f7f8fa;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.destination-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.destination-form-fields > button {
+  align-self: flex-start;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #1f6feb;
+  background: none;
+  border: 1px solid #1f6feb;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.destination-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.destination-form-field input,
+.destination-form-field select {
+  font: inherit;
+  font-size: 0.85rem;
+  color: canvastext;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.destination-form-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.destination-form-actions button {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.destination-form-actions button:first-child {
+  color: #fff;
+  background: #1f6feb;
+  border-color: #1f6feb;
+}
+
+.destination-form-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* The actual contenteditable div Tiptap renders inside .desktop-editor. */
