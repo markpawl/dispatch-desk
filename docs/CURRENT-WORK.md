@@ -38,13 +38,17 @@ only today) into the real place destinations are created, templated from an exis
 deleted. `SendMenu.tsx`'s Send popover becomes a plain saved-destinations picker once any exist;
 if none exist yet it launches the same creation form itself.
 
-**Group A — Destination delete (server + DestinationsPanel wiring)**
-- [ ] `server/src/destinations.ts` — `deleteDestination(userId, id)`
-- [ ] `server/src/requestHandler.ts` — `DELETE /api/destinations/:id`
-- [ ] `client/src/components/DestinationsPanel.tsx` — replace dummy destinations list with real
+**Group A — Destination delete (server + DestinationsPanel wiring)** ✅
+- [x] `server/src/destinations.ts` — `deleteDestination(userId, id)`
+- [x] `server/src/requestHandler.ts` — `DELETE /api/destinations/:id`
+- [x] `client/src/components/DestinationsPanel.tsx` — replace dummy destinations list with real
       `GET /api/destinations` data; each row shows its label on the left + an "×" on the right
       that opens an inline confirm before deleting
-- [ ] Test updates: `destinations.test.ts`, `requestHandler.test.ts`, `DestinationsPanel.test.tsx`
+- [x] Test updates: `destinations.test.ts`, `requestHandler.test.ts`, `DestinationsPanel.test.tsx`
+
+_(Done: commit `5df267b`. Also extracted `client/src/lib/destinations.ts` — the `SavedDestination`
+type + `destinationLabel` helper, shared between `DestinationsPanel.tsx` and `SendMenu.tsx` instead
+of duplicated. Tests + lint + typecheck + build all green.)_
 
 **Group B — Gmail send capability (server only)**
 - [ ] `server/src/googleAuth.ts` — add `gmail.send` to `GOOGLE_SCOPES` (existing connections need
