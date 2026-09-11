@@ -59,17 +59,22 @@ of duplicated. Tests + lint + typecheck + build all green.)_
 
 _(Done: commit `518c9e4`. Tests + lint + typecheck + build all green.)_
 
-**Group C — Email destination type + daily subject sequence**
-- [ ] `server/src/destinations.ts` — `EmailDestination { id, type: 'email', address, shortLabel,
-      emailSubjectLabel?: string, createdAt }`, `saveEmailDestination` (upsert by address)
-- [ ] `server/src/emailSequence.ts` (new) — atomic per-destination, per-day Redis counter
+**Group C — Email destination type + daily subject sequence** ✅
+- [x] `server/src/destinations.ts` — `EmailDestination { id, type: 'email', address, shortLabel,
+      emailSubjectLabel?: string, createdAt }`, `saveEmailDestination` (always creates a new
+      entry, *not* an upsert by address -- shortLabel/emailSubjectLabel are fixed at creation, so
+      two destinations can legitimately share an address with different labels)
+- [x] `server/src/emailSequence.ts` (new) — atomic per-destination, per-day Redis counter
       (`email-seq:{destinationId}:{localDateKey}`), zero-based, TTL'd so keys don't accumulate
-- [ ] `server/src/requestHandler.ts` — `POST /api/destinations` (new: create a destination
+- [x] `server/src/requestHandler.ts` — `POST /api/destinations` (new: create a destination
       directly, decoupled from sending) handles `email`; `/api/send` for an email destination
       builds the subject as `` `${emailSubjectLabel || shortLabel} ${localTime} ${seq}` `` (client
       sends `localDate` for the day-boundary key and `localTime` as `mm/dd/yyyy HH:mm`, both in
       the browser's timezone) and calls `sendEmail`
-- [ ] Test updates: `destinations.test.ts`, `requestHandler.test.ts`
+- [x] Test updates: `destinations.test.ts`, `requestHandler.test.ts`, plus `emailSequence.test.ts`
+      (new)
+
+_(Done: commit `0c3fd7a`. Tests + lint + typecheck + build all green.)_
 
 **Group D — DestinationsPanel creation flow (all three channels) + SendMenu rework**
 - [ ] New shared form component `client/src/components/DestinationForm.tsx`: channel picker →
