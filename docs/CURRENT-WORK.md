@@ -115,13 +115,16 @@ small `SendMenu.tsx` fix -- its saved-destinations list now sends by `destinatio
 `client/src/lib/localSendTime.ts` helper for the `localDate`/`localTime` fields email destinations
 need. Tests + lint + typecheck + build all green.)_
 
-**Group D3 — Client: `SendMenu.tsx` rework**
-- [ ] Remove the now-redundant Google Docs/Dropbox search UI (moved to `DestinationForm` in D2)
+**Group D3 — Client: `SendMenu.tsx` rework** ✅
+- [x] Remove the now-redundant Google Docs/Dropbox search UI (moved to `DestinationForm` in D2)
       — becomes a plain saved-destinations picker
-- [ ] No destinations yet → clicking "Send" opens `DestinationForm` (channel picker first); on
+- [x] No destinations yet → clicking "Send" opens `DestinationForm` (channel picker first); on
       Save, the new destination is inserted and a "Send from \<shortLabel\>" button appears to
       dispatch immediately
-- [ ] Test updates: `SendMenu.test.tsx`
+- [x] Test updates: `SendMenu.test.tsx`
+
+_(Done: commit `8bad413`. Canceling the empty-state create form closes the popover entirely (no
+picker/list left to fall back to). Tests + lint + typecheck + build all green.)_
 
 **Group D4 — Server: simplify `/api/send` to `destinationId`-only**
 - [ ] `server/src/requestHandler.ts` — drop the ad-hoc `docId`/`docName`/`dropboxPath`/
