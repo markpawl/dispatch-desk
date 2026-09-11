@@ -100,7 +100,7 @@ describe('googleAuth', () => {
     expect(() => getOAuthClient()).toThrow(/GOOGLE_CLIENT_ID/)
   })
 
-  it('getAuthUrl requests offline access, forced consent, and the documents/drive scopes', () => {
+  it('getAuthUrl requests offline access, forced consent, and the documents/drive/gmail.send scopes', () => {
     const url = getAuthUrl()
     expect(url).toBe('https://accounts.google.com/o/oauth2/v2/auth?mock=1')
     expect(generateAuthUrl).toHaveBeenCalledWith({

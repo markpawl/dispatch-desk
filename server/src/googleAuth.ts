@@ -12,12 +12,17 @@ function googleOAuthKey(userId: string): string {
 }
 
 // --- Connect (Google as a send destination) -----------------------------
-// Read access to search for a doc to send to, write access to append to one.
-// Kept as narrow as the two features actually need (see
-// docs/CURRENT-WORK.md) rather than requesting broad Drive access.
+// Read access to search for a doc to send to, write access to append to one,
+// plus send-only Gmail access for the Email destination (server/src/gmail.ts).
+// Kept as narrow as these features actually need (see docs/CURRENT-WORK.md)
+// rather than requesting broad Drive/Gmail access. Adding gmail.send here
+// means a user who connected Google before it existed needs to reconnect
+// once to be re-prompted for it -- Google doesn't retroactively grant scopes
+// to an already-issued refresh token.
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/documents',
   'https://www.googleapis.com/auth/drive.metadata.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
 ]
 
 // --- Login (sign in to Dispatch Desk itself) ---------------------------
