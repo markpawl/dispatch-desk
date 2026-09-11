@@ -32,45 +32,36 @@ function selectAll() {
 }
 
 interface StubOptions {
-  google?: boolean
-  dropbox?: boolean
   destinations?: unknown[]
-  googleDocs?: { id: string; name: string }[]
-  dropboxFiles?: { path: string; name: string }[]
+  createdDestination?: unknown
   send?: { ok: boolean; body?: unknown }
   onSend?: (init?: RequestInit) => void
 }
 
-// SendMenu now probes both /api/google/status and /api/dropbox/status on open
-// (plus /api/destinations), and searches each connected provider separately.
+// SendMenu itself only ever calls /api/destinations (list) and /api/send --
+// the create-a-destination flow (google/dropbox status+search,
+// POST /api/destinations) is DestinationForm.tsx's, exercised here only via
+// the "no destinations yet" empty-state case.
 function stubFetch(options: StubOptions = {}) {
-  const {
-    google = false,
-    dropbox = false,
-    destinations = [],
-    googleDocs = [],
-    dropboxFiles = [],
-    send = { ok: true },
-    onSend,
-  } = options
+  const { destinations = [], createdDestination, send = { ok: true }, onSend } = options
 
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
-      if (url === '/api/google/status') {
-        return Promise.resolve({ json: () => Promise.resolve({ connected: google }) })
-      }
-      if (url === '/api/dropbox/status') {
-        return Promise.resolve({ json: () => Promise.resolve({ connected: dropbox }) })
-      }
-      if (url === '/api/destinations') {
+      if (url === '/api/destinations' && (!init || !init.method)) {
         return Promise.resolve({ json: () => Promise.resolve({ destinations }) })
       }
-      if (url.startsWith('/api/google-docs/search')) {
-        return Promise.resolve({ json: () => Promise.resolve({ docs: googleDocs }) })
+      if (url === '/api/destinations' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, destination: createdDestination }),
+        })
       }
-      if (url.startsWith('/api/dropbox/search')) {
-        return Promise.resolve({ json: () => Promise.resolve({ files: dropboxFiles }) })
+      if (url === '/api/google/status') {
+        return Promise.resolve({ json: () => Promise.resolve({ connected: false }) })
+      }
+      if (url === '/api/dropbox/status') {
+        return Promise.resolve({ json: () => Promise.resolve({ connected: false }) })
       }
       if (url === '/api/send') {
         onSend?.(init)
@@ -111,24 +102,9 @@ describe('SendMenu', () => {
     await waitFor(() => expect(button).toBeEnabled())
   })
 
-  it('shows connect prompts for both providers when neither is connected', async () => {
-    stubFetch({ google: false, dropbox: false })
-    await openMenu()
-
-    expect(await screen.findByRole('link', { name: 'Connect Google to send' })).toHaveAttribute(
-      'href',
-      '/auth/connect/google',
-    )
-    expect(screen.getByRole('link', { name: 'Connect Dropbox to send' })).toHaveAttribute(
-      'href',
-      '/auth/connect/dropbox',
-    )
-  })
-
   it('lists saved destinations and sends + deletes the selection on click', async () => {
     const sent: RequestInit[] = []
     stubFetch({
-      google: true,
       destinations: [
         {
           id: 'dest-1',
@@ -159,55 +135,8 @@ describe('SendMenu', () => {
     )
   })
 
-  it('searches Google Docs and sends to a new (unsaved) doc', async () => {
-    const sent: RequestInit[] = []
-    stubFetch({
-      google: true,
-      googleDocs: [{ id: 'doc-2', name: 'Journal' }],
-      onSend: (init) => sent.push(init as RequestInit),
-    })
-    await openMenu()
-
-    const search = await screen.findByPlaceholderText('Search Google Docs…')
-    await userEvent.type(search, 'Jour')
-
-    const result = await screen.findByRole('button', { name: 'Journal' })
-    await userEvent.click(result)
-
-    expect(JSON.parse(sent[0].body as string)).toEqual({
-      text: 'hello world',
-      docId: 'doc-2',
-      docName: 'Journal',
-    })
-    await waitFor(() => expect(capturedEditor?.getText()).toBe(''))
-  })
-
-  it('searches Dropbox and sends to a file (dropboxPath/dropboxName body)', async () => {
-    const sent: RequestInit[] = []
-    stubFetch({
-      dropbox: true,
-      dropboxFiles: [{ path: '/journal.md', name: 'journal.md' }],
-      onSend: (init) => sent.push(init as RequestInit),
-    })
-    await openMenu()
-
-    const search = await screen.findByPlaceholderText('Search Dropbox files…')
-    await userEvent.type(search, 'jour')
-
-    const result = await screen.findByRole('button', { name: 'journal.md' })
-    await userEvent.click(result)
-
-    expect(JSON.parse(sent[0].body as string)).toEqual({
-      text: 'hello world',
-      dropboxPath: '/journal.md',
-      dropboxName: 'journal.md',
-    })
-    await waitFor(() => expect(capturedEditor?.getText()).toBe(''))
-  })
-
   it('shows an error and keeps the selection when the send fails', async () => {
     stubFetch({
-      google: true,
       destinations: [
         {
           id: 'dest-1',
@@ -227,5 +156,48 @@ describe('SendMenu', () => {
 
     expect(await screen.findByText('Google is not connected')).toBeInTheDocument()
     expect(capturedEditor?.getText()).toBe('hello world')
+  })
+
+  it('with no destinations yet, opens the create-destination form instead of an empty list', async () => {
+    stubFetch({ destinations: [] })
+    await openMenu()
+
+    expect(await screen.findByRole('button', { name: 'Email' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Google Doc' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Dropbox File' })).toBeInTheDocument()
+  })
+
+  it('creating the first destination inline offers "Send from <label>", and sends', async () => {
+    const sent: RequestInit[] = []
+    const created = {
+      id: 'new-email',
+      type: 'email',
+      address: 'to@example.com',
+      shortLabel: 'Weekly Notes',
+      createdAt: 'now',
+    }
+    stubFetch({ destinations: [], createdDestination: created, onSend: (init) => sent.push(init as RequestInit) })
+    await openMenu()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Email' }))
+    await userEvent.type(screen.getByLabelText('Address'), 'to@example.com')
+    await userEvent.type(screen.getByLabelText('Short label'), 'Weekly Notes')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    const sendButton = await screen.findByRole('button', { name: 'Send from Weekly Notes' })
+    await userEvent.click(sendButton)
+
+    const body = JSON.parse(sent[0].body as string) as Record<string, unknown>
+    expect(body).toMatchObject({ text: 'hello world', destinationId: 'new-email' })
+  })
+
+  it('canceling the create-destination form (no destinations yet) closes the popover', async () => {
+    stubFetch({ destinations: [] })
+    await openMenu()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Email' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByLabelText('Address')).not.toBeInTheDocument()
   })
 })

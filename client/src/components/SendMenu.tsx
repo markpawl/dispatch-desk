@@ -1,31 +1,28 @@
 import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
+import { DestinationForm } from './DestinationForm'
 import { destinationLabel, type SavedDestination } from '../lib/destinations'
 import { localDateKey, localTimeLabel } from '../lib/localSendTime'
 
-interface FileSummary {
-  // For Google Docs this is the doc id; for Dropbox it's the file path.
-  ref: string
-  name: string
+// Sends by id -- localDate/localTime are read only when it resolves to an
+// email destination, but harmless to always include.
+interface SendBody {
+  destinationId: string
+  localDate: string
+  localTime: string
 }
-
-// The three shapes /api/send accepts. A saved destination -- of any type,
-// email included -- always sends by id; localDate/localTime are read only
-// when it resolves to an email destination, but harmless to always include.
-type SendBody =
-  | { destinationId: string; localDate: string; localTime: string }
-  | { docId: string; docName: string }
-  | { dropboxPath: string; dropboxName: string }
 
 interface SendMenuProps {
   editor: Editor | null
 }
 
 // The "select text -> send to a destination" flow (see docs/REQUIREMENTS.md's
-// Send flow). Two provider types so far -- a Google Doc and a Dropbox file,
-// both appended to directly rather than through the MCP Host (see
-// docs/IDEAS.md's "send-helper plugin structure" idea).
+// Send flow). A plain picker over your saved destinations -- creating one
+// (any of the three channels) happens in DestinationsPanel.tsx via
+// DestinationForm.tsx, except for the very first one: with none saved yet,
+// this opens that same form itself rather than showing an empty list (see
+// docs/CURRENT-WORK.md's Group D3).
 export function SendMenu({ editor }: SendMenuProps) {
   const hasSelection = useEditorState({
     editor,
@@ -33,15 +30,13 @@ export function SendMenu({ editor }: SendMenuProps) {
   })
 
   const [isOpen, setIsOpen] = useState(false)
-  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
-  const [dropboxConnected, setDropboxConnected] = useState<boolean | null>(null)
   const [destinations, setDestinations] = useState<SavedDestination[]>([])
-  const [googleQuery, setGoogleQuery] = useState('')
-  const [googleResults, setGoogleResults] = useState<FileSummary[]>([])
-  const [googleSearching, setGoogleSearching] = useState(false)
-  const [dropboxQuery, setDropboxQuery] = useState('')
-  const [dropboxResults, setDropboxResults] = useState<FileSummary[]>([])
-  const [dropboxSearching, setDropboxSearching] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [creating, setCreating] = useState(false)
+  // The destination created in this popover session, if any -- its button
+  // reads "Send from <label>" instead of just "<label>" (see
+  // docs/CURRENT-WORK.md's Group D3), so it's clear it's ready to send to.
+  const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -60,42 +55,23 @@ export function SendMenu({ editor }: SendMenuProps) {
   const openMenu = () => {
     setIsOpen(true)
     setError(null)
-    fetch('/api/google/status')
-      .then((response) => response.json())
-      .then((body: { connected: boolean }) => setGoogleConnected(body.connected))
-      .catch(() => setGoogleConnected(false))
-    fetch('/api/dropbox/status')
-      .then((response) => response.json())
-      .then((body: { connected: boolean }) => setDropboxConnected(body.connected))
-      .catch(() => setDropboxConnected(false))
+    setLoaded(false)
+    setCreating(false)
+    setNewlyCreatedId(null)
     fetch('/api/destinations')
       .then((response) => response.json())
-      .then((body: { destinations: SavedDestination[] }) => setDestinations(body.destinations))
+      .then((body: { destinations: SavedDestination[] }) => {
+        setDestinations(body.destinations)
+        setCreating(body.destinations.length === 0)
+      })
       .catch(() => setDestinations([]))
+      .finally(() => setLoaded(true))
   }
 
-  const runGoogleSearch = (nextQuery: string) => {
-    setGoogleQuery(nextQuery)
-    setGoogleSearching(true)
-    fetch(`/api/google-docs/search?q=${encodeURIComponent(nextQuery)}`)
-      .then((response) => response.json())
-      .then((body: { docs: { id: string; name: string }[] }) =>
-        setGoogleResults(body.docs.map((doc) => ({ ref: doc.id, name: doc.name }))),
-      )
-      .catch(() => setGoogleResults([]))
-      .finally(() => setGoogleSearching(false))
-  }
-
-  const runDropboxSearch = (nextQuery: string) => {
-    setDropboxQuery(nextQuery)
-    setDropboxSearching(true)
-    fetch(`/api/dropbox/search?q=${encodeURIComponent(nextQuery)}`)
-      .then((response) => response.json())
-      .then((body: { files: { path: string; name: string }[] }) =>
-        setDropboxResults(body.files.map((file) => ({ ref: file.path, name: file.name }))),
-      )
-      .catch(() => setDropboxResults([]))
-      .finally(() => setDropboxSearching(false))
+  const handleCreated = (destination: SavedDestination) => {
+    setDestinations((current) => [...current, destination])
+    setNewlyCreatedId(destination.id)
+    setCreating(false)
   }
 
   const send = async (target: SendBody) => {
@@ -129,9 +105,14 @@ export function SendMenu({ editor }: SendMenuProps) {
     }
   }
 
-  if (!editor) return null
+  const sendTo = (destination: SavedDestination) =>
+    send({
+      destinationId: destination.id,
+      localDate: localDateKey(),
+      localTime: localTimeLabel(),
+    })
 
-  const checking = googleConnected === null && dropboxConnected === null
+  if (!editor) return null
 
   return (
     <div className="send-menu" ref={containerRef}>
@@ -145,98 +126,28 @@ export function SendMenu({ editor }: SendMenuProps) {
       </button>
       {isOpen && (
         <div className="send-menu-popover">
-          {checking && <div className="send-menu-status">Checking connections…</div>}
+          {!loaded && <div className="send-menu-status">Loading destinations…</div>}
 
-          {destinations.length > 0 && (
+          {creating && (
+            <DestinationForm
+              destinations={destinations}
+              onCreated={handleCreated}
+              onCancel={() => setIsOpen(false)}
+            />
+          )}
+
+          {!creating && destinations.length > 0 && (
             <ul className="send-menu-destinations">
               {destinations.map((destination) => (
                 <li key={destination.id}>
-                  <button
-                    type="button"
-                    disabled={sending}
-                    onClick={() =>
-                      send({
-                        destinationId: destination.id,
-                        localDate: localDateKey(),
-                        localTime: localTimeLabel(),
-                      })
-                    }
-                  >
-                    {destinationLabel(destination)}
+                  <button type="button" disabled={sending} onClick={() => sendTo(destination)}>
+                    {destination.id === newlyCreatedId
+                      ? `Send from ${destinationLabel(destination)}`
+                      : destinationLabel(destination)}
                   </button>
                 </li>
               ))}
             </ul>
-          )}
-
-          {googleConnected === false && (
-            <a className="google-connect" href="/auth/connect/google">
-              Connect Google to send
-            </a>
-          )}
-          {googleConnected === true && (
-            <>
-              <input
-                type="text"
-                className="send-menu-search"
-                placeholder="Search Google Docs…"
-                value={googleQuery}
-                disabled={sending}
-                onChange={(event) => runGoogleSearch(event.target.value)}
-              />
-              {googleSearching && <div className="send-menu-status">Searching…</div>}
-              {!googleSearching && googleQuery && googleResults.length === 0 && (
-                <div className="send-menu-status">No matching Docs</div>
-              )}
-              <ul className="send-menu-results">
-                {googleResults.map((doc) => (
-                  <li key={doc.ref}>
-                    <button
-                      type="button"
-                      disabled={sending}
-                      onClick={() => send({ docId: doc.ref, docName: doc.name })}
-                    >
-                      {doc.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {dropboxConnected === false && (
-            <a className="google-connect" href="/auth/connect/dropbox">
-              Connect Dropbox to send
-            </a>
-          )}
-          {dropboxConnected === true && (
-            <>
-              <input
-                type="text"
-                className="send-menu-search"
-                placeholder="Search Dropbox files…"
-                value={dropboxQuery}
-                disabled={sending}
-                onChange={(event) => runDropboxSearch(event.target.value)}
-              />
-              {dropboxSearching && <div className="send-menu-status">Searching…</div>}
-              {!dropboxSearching && dropboxQuery && dropboxResults.length === 0 && (
-                <div className="send-menu-status">No matching files</div>
-              )}
-              <ul className="send-menu-results">
-                {dropboxResults.map((file) => (
-                  <li key={file.ref}>
-                    <button
-                      type="button"
-                      disabled={sending}
-                      onClick={() => send({ dropboxPath: file.ref, dropboxName: file.name })}
-                    >
-                      {file.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
           )}
 
           {error && <div className="send-menu-error">{error}</div>}
