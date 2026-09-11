@@ -651,18 +651,16 @@ describe('requestHandler', () => {
   })
 
   describe('POST /api/send', () => {
-    it('sends to an existing destinationId: appends, upserts, logs', async () => {
+    it('sends to an existing destinationId: appends and logs, no longer upserts', async () => {
       const response = await fetch(`${baseUrl}/api/send`, {
         method: 'POST',
         body: JSON.stringify({ text: 'hello world', destinationId: 'dest-1' }),
       })
       expect(mocks.appendTextToDoc).toHaveBeenCalledWith('user-1', 'doc-1', 'hello world')
-      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith(
-        'user-1',
-        'doc-1',
-        'Meeting Notes',
-        'Meeting Notes',
-      )
+      // Every destination sent to already exists (found via getDestination)
+      // -- DestinationForm.tsx is the only way to create one now (Group D4
+      // per docs/CURRENT-WORK.md), so /api/send never calls save*.
+      expect(mocks.saveGoogleDocDestination).not.toHaveBeenCalled()
       expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
         'user-1',
         expect.objectContaining({ docName: 'Meeting Notes', textPreview: 'hello world' }),
@@ -670,41 +668,6 @@ describe('requestHandler', () => {
       const body = (await response.json()) as { ok: boolean; destination: { docId: string } }
       expect(body.ok).toBe(true)
       expect(body.destination.docId).toBe('doc-1')
-    })
-
-    it('sends to an ad-hoc docId/docName, saving it as a new destination', async () => {
-      const response = await fetch(`${baseUrl}/api/send`, {
-        method: 'POST',
-        body: JSON.stringify({ text: 'hi', docId: 'doc-2', docName: 'Journal' }),
-      })
-      expect(mocks.appendTextToDoc).toHaveBeenCalledWith('user-1', 'doc-2', 'hi')
-      expect(mocks.saveGoogleDocDestination).toHaveBeenCalledWith(
-        'user-1',
-        'doc-2',
-        'Journal',
-        'Journal',
-      )
-      expect(response.status).toBe(200)
-    })
-
-    it('sends to an ad-hoc Dropbox file, appending and saving it', async () => {
-      const response = await fetch(`${baseUrl}/api/send`, {
-        method: 'POST',
-        body: JSON.stringify({ text: 'note', dropboxPath: '/journal.md', dropboxName: 'journal.md' }),
-      })
-      expect(mocks.appendTextToDropboxFile).toHaveBeenCalledWith('user-1', '/journal.md', 'note')
-      expect(mocks.saveDropboxFileDestination).toHaveBeenCalledWith(
-        'user-1',
-        '/journal.md',
-        'journal.md',
-        'journal.md',
-      )
-      expect(mocks.appendSendLogEntry).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({ docName: 'journal.md', textPreview: 'note' }),
-      )
-      expect(mocks.appendTextToDoc).not.toHaveBeenCalled()
-      expect(response.status).toBe(200)
     })
 
     it('sends to a saved dropbox-file destinationId', async () => {
@@ -795,7 +758,7 @@ describe('requestHandler', () => {
       expect(mocks.appendTextToDoc).not.toHaveBeenCalled()
     })
 
-    it('400s when neither destinationId nor docId/docName are given', async () => {
+    it('400s when destinationId is missing', async () => {
       const response = await fetch(`${baseUrl}/api/send`, {
         method: 'POST',
         body: JSON.stringify({ text: 'hello' }),
