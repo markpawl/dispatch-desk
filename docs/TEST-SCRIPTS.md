@@ -2,6 +2,7 @@
 
 Living document.
 Contains scripts for manual testing of specific app features.
+Manual testing is performed by developers to ensure the app behaves as expected.
 Scripts are organized by feature and include steps to reproduce the behavior.
 Scripts can be created by developers or by asking AI to generate them.
 Scripts are numbered and include a description of the feature being tested.
