@@ -7,6 +7,11 @@ const COLORS = ['#1a1a1a', '#c0392b', '#2a8a4a', '#1f6feb', '#b8860b']
 
 interface EditorToolbarProps {
   editor: Editor | null
+  // Forces every button disabled regardless of editor state -- used for the
+  // signed-out shell (App.tsx), which renders a real (but local, throwaway,
+  // non-editable) editor purely for visual parity rather than hiding the
+  // toolbar entirely. See docs/CURRENT-WORK.md.
+  disabled?: boolean
 }
 
 // Subscribes to just the bits of editor state the toolbar needs to
@@ -34,7 +39,7 @@ function useToolbarState(editor: Editor | null) {
   })
 }
 
-export function EditorToolbar({ editor }: EditorToolbarProps) {
+export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) {
   const state = useToolbarState(editor)
 
   if (!editor || !state) return null
@@ -54,6 +59,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     <div className="editor-toolbar">
       <button
         type="button"
+        disabled={disabled}
         className={state.bold ? 'active' : ''}
         onClick={() => editor.chain().focus().toggleBold().run()}
         title="Bold (Ctrl+B)"
@@ -62,6 +68,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       </button>
       <button
         type="button"
+        disabled={disabled}
         className={state.italic ? 'active' : ''}
         onClick={() => editor.chain().focus().toggleItalic().run()}
         title="Italic (Ctrl+I)"
@@ -70,6 +77,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       </button>
       <button
         type="button"
+        disabled={disabled}
         className={state.underline ? 'active' : ''}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         title="Underline (Ctrl+U)"
@@ -78,6 +86,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       </button>
       <button
         type="button"
+        disabled={disabled}
         className={state.strike ? 'active' : ''}
         onClick={() => editor.chain().focus().toggleStrike().run()}
         title="Strikethrough"
@@ -91,6 +100,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <button
           key={level}
           type="button"
+          disabled={disabled}
           className={state.headingLevel === level ? 'active' : ''}
           onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
           title={`Heading ${level}`}
@@ -100,6 +110,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       ))}
       <button
         type="button"
+        disabled={disabled}
         className={state.bulletList ? 'active' : ''}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         title="Bullet list"
@@ -108,6 +119,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       </button>
       <button
         type="button"
+        disabled={disabled}
         className={state.orderedList ? 'active' : ''}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         title="Numbered list"
@@ -119,6 +131,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       <button
         type="button"
+        disabled={disabled}
         className={state.link ? 'active' : ''}
         onClick={setLink}
         title="Link"
@@ -132,6 +145,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <button
           key={color}
           type="button"
+          disabled={disabled}
           className={`color-swatch ${state.color === color ? 'active' : ''}`}
           style={{ backgroundColor: color }}
           onClick={() => editor.chain().focus().setColor(color).run()}
@@ -141,6 +155,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       ))}
       <button
         type="button"
+        disabled={disabled}
         onClick={() => editor.chain().focus().unsetColor().run()}
         title="Clear color"
       >

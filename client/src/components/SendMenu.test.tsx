@@ -14,7 +14,7 @@ import { SendMenu } from './SendMenu'
 // it does in the app; no Yjs/Collaboration needed since SendMenu never
 // touches that part of the editor.
 let capturedEditor: Editor | null = null
-function Harness() {
+function Harness({ disabled }: { disabled?: boolean } = {}) {
   const editor = useEditor({
     extensions: [StarterKit],
     content: '<p>hello world</p>',
@@ -22,7 +22,7 @@ function Harness() {
       capturedEditor = editor
     },
   })
-  return <SendMenu editor={editor} />
+  return <SendMenu editor={editor} disabled={disabled} />
 }
 
 function selectAll() {
@@ -100,6 +100,13 @@ describe('SendMenu', () => {
 
     selectAll()
     await waitFor(() => expect(button).toBeEnabled())
+  })
+
+  it('stays disabled with a selection when disabled is set', async () => {
+    render(<Harness disabled />)
+    const button = await screen.findByRole('button', { name: 'Send' })
+    selectAll()
+    expect(button).toBeDisabled()
   })
 
   it('lists saved destinations and sends + deletes the selection on click', async () => {

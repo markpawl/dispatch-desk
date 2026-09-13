@@ -75,12 +75,24 @@ describe('App', () => {
     await waitFor(() => expect(editor).toHaveTextContent('hello'))
   })
 
-  it('shows the sign-in screen (no editor) when not signed in', async () => {
+  it('shows the same desktop shell when signed out, disabled except "Log In"', async () => {
     stubFetch({ user: null })
     render(<App />)
+
+    // Same shell as signed-in: header, toolbar, editor area -- just inert.
+    const editor = await screen.findByRole('textbox')
+    expect(editor).toHaveAttribute('contenteditable', 'false')
+    expect(screen.getByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'B' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Destinations' })).toBeDisabled()
+
+    // No login dialog until "Log In" is clicked.
+    expect(screen.queryByRole('link', { name: 'Sign in with Google' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Log In' }))
     const link = await screen.findByRole('link', { name: 'Sign in with Google' })
     expect(link).toHaveAttribute('href', '/auth/login/google')
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+
     // The build timestamp shown in the app header appears here too (no
     // VITE_BUILD_TIMESTAMP in tests, so it falls back to "dev").
     expect(screen.getByText('dev')).toBeInTheDocument()

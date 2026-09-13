@@ -182,9 +182,17 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   opened from a button showing the signed-in name) lists each provider (Google, Dropbox) with a
   Connect link or a Disconnect button, plus Sign out. Disconnect revokes the grant best-effort at
   the provider then drops the stored tokens (`POST /api/{provider}/disconnect`); sign-out clears the
-  server session (`POST /auth/logout`) and returns to the sign-in screen. This replaced the earlier
-  ad-hoc "Connect Google" header link. (The separate `DestinationsPanel` -- see Destination sidebar
-  above -- is still dummy data and unrelated to this.)
+  server session (`POST /auth/logout`). This replaced the earlier ad-hoc "Connect Google" header
+  link.
+- **Signed-out entry point**: no separate sign-in screen -- the same desktop shell (header, toolbar,
+  Send button, the Destinations sidebar, editor area) renders regardless of auth state, with
+  everything in it disabled/non-interactive while signed out except the header's corner button,
+  which reads "Log In" in place of the signed-in account name. Clicking it opens a popover
+  (`client/src/components/LoginDialog.tsx`, the signed-out counterpart to `AccountMenu.tsx`) listing
+  login options -- just "Sign in with Google" for now, laid out so a future provider is just
+  another row -- never appearing on its own. The signed-out editor is a real Tiptap instance for
+  visual parity, but local and non-editable, with no Collaboration extension and no WebSocket -- a
+  signed-out visitor still never opens a real sync connection.
 
 ## Access & Collaboration
 

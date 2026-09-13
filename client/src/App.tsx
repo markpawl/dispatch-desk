@@ -10,6 +10,7 @@ import { DestinationsPanel } from './components/DestinationsPanel'
 import { EditorToolbar } from './components/EditorToolbar'
 import type { LinkFollowMenuState } from './components/LinkFollowMenu'
 import { LinkFollowMenu } from './components/LinkFollowMenu'
+import { LoginDialog } from './components/LoginDialog'
 import { SendMenu } from './components/SendMenu'
 import { createDesktopDoc } from './lib/desktopDoc'
 import { LinkFollowMenu as LinkFollowMenuExtension } from './lib/linkFollowMenu'
@@ -29,10 +30,14 @@ const buildTimestamp = import.meta.env.VITE_BUILD_TIMESTAMP
   : null
 
 // Gates the whole app behind sign-in. `me === undefined` while the initial
-// /api/me check is in flight (render nothing rather than flash a screen),
-// then either the sign-in screen or the desktop. The desktop's Yjs doc and
-// WebSocket aren't created until `<Desktop>` mounts, so a signed-out visitor
-// never opens a sync connection.
+// /api/me check is in flight (render nothing rather than flash a screen).
+// Signed out, `SignedOut` renders the *same* desktop shell as `Desktop`
+// (header, toolbar, editor area) rather than a different screen -- just
+// with everything in it disabled/non-interactive except the header's
+// "Log In" button (see docs/CURRENT-WORK.md). Its editor is a real Tiptap
+// instance for visual parity, but a local, throwaway, non-editable one with
+// no Collaboration extension and no WebSocket -- a signed-out visitor still
+// never opens a real sync connection.
 function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined)
 
@@ -53,21 +58,45 @@ function App() {
   }, [])
 
   if (me === undefined) return null
-  if (me === null) return <SignIn />
+  if (me === null) return <SignedOut />
   return <Desktop user={me} onSignedOut={() => setMe(null)} />
 }
 
-function SignIn() {
+function SignedOut() {
+  // No Collaboration/fragment -- this editor is never synced anywhere, just
+  // rendered non-editable for the same visual shape the real one has.
+  const extensions = useMemo(
+    () => [StarterKit.configure({ link: { openOnClick: false } }), TextStyle, Color],
+    [],
+  )
+  const editor = useEditor({ extensions, editable: false }, [])
+
   return (
-    <div className="signin">
-      <h1>Dispatch Desk</h1>
-      <p>Sign in to continue.</p>
-      <a className="signin-button" href="/auth/login/google">
-        Sign in with Google
-      </a>
-      <span className="version" title="When this deployment was built">
-        {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
-      </span>
+    <div className="desktop">
+      <header className="desktop-header">
+        <h1>Dispatch Desk</h1>
+        <div className="desktop-header-status">
+          <span className="version" title="When this deployment was built">
+            {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
+          </span>
+          <LoginDialog />
+        </div>
+      </header>
+      <div className="desktop-toolbar-row">
+        <EditorToolbar editor={editor} disabled />
+        <SendMenu editor={editor} disabled />
+        <button
+          type="button"
+          className="destinations-toggle"
+          disabled
+          title="Toggle channels & destinations"
+        >
+          Destinations
+        </button>
+      </div>
+      <div className="desktop-main">
+        <EditorContent className="desktop-editor" editor={editor} />
+      </div>
     </div>
   )
 }

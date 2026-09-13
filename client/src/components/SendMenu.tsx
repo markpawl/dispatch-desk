@@ -15,6 +15,9 @@ interface SendBody {
 
 interface SendMenuProps {
   editor: Editor | null
+  // Forces the Send button disabled regardless of selection -- used for the
+  // signed-out shell (App.tsx). See EditorToolbar.tsx's same prop.
+  disabled?: boolean
 }
 
 // The "select text -> send to a destination" flow (see docs/REQUIREMENTS.md's
@@ -23,7 +26,7 @@ interface SendMenuProps {
 // DestinationForm.tsx, except for the very first one: with none saved yet,
 // this opens that same form itself rather than showing an empty list (see
 // docs/CURRENT-WORK.md's Group D3).
-export function SendMenu({ editor }: SendMenuProps) {
+export function SendMenu({ editor, disabled = false }: SendMenuProps) {
   const hasSelection = useEditorState({
     editor,
     selector: ({ editor }) => (editor ? !editor.state.selection.empty : false),
@@ -118,7 +121,7 @@ export function SendMenu({ editor }: SendMenuProps) {
     <div className="send-menu" ref={containerRef}>
       <button
         type="button"
-        disabled={!hasSelection}
+        disabled={disabled || !hasSelection}
         onClick={() => (isOpen ? setIsOpen(false) : openMenu())}
         title={hasSelection ? 'Send selected text to a destination' : 'Select text first'}
       >
