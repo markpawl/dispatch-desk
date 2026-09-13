@@ -30,4 +30,67 @@ nothing is in flight. **The rules below survive every clear-out — never remove
 
 ## Plan
 
-_(none active)_
+### 1. Persistent account button + login dialog
+
+Replaces the full-page `SignIn` gate with the *same desktop shell* rendered in both auth states
+(header, toolbar, Send button, the Destinations sidebar, editor area) rather than swapping to a
+different screen. Signed out, everything in that shell is disabled/non-interactive -- toolbar
+buttons, Send, the Destinations sidebar, and the editor itself (no typing) -- except the header's
+top-right corner button, which is always in the same spot: the signed-in account name
+(`AccountMenu.tsx`, unchanged) or, signed out, a "Log In" button (new `LoginDialog.tsx`) that
+opens a popover of login options (just "Sign in with Google" for now, laid out so a future
+provider is just another row) -- never on its own, only via clicking the button. No real Yjs
+doc/WebSocket connection is created for a signed-out visitor (an anonymous visitor still never
+opens a sync connection) -- the signed-out editor is a local, throwaway, non-editable Tiptap
+instance purely for visual parity, discarded once signed in.
+
+Note: Group B below makes the Destinations sidebar permanently visible (no more toggle button) --
+whichever of A/B lands first should account for the other's current state (a toggle button to
+disable, if A lands first; a permanent-but-inert sidebar with nothing to show pre-login, if B
+lands first).
+
+**Group A — the whole thing (client-only; `/auth/login/google` already exists server-side)** ✅
+- [x] New `client/src/components/LoginDialog.tsx`: "Log In" corner button + its popover
+      (`/auth/login/google` link inside, styled as a list row so more providers can be added later)
+- [x] `client/src/components/EditorToolbar.tsx` / `SendMenu.tsx`: accept a `disabled` prop that
+      forces every button disabled regardless of editor state (rather than each returning `null`
+      when there's no editor, so the shell still renders as normal, just inert)
+- [x] `client/src/App.tsx`: signed-out state renders the same shell as `Desktop` -- header (title
+      + `LoginDialog` in the same corner `AccountMenu` sits in, no connection-status pill),
+      toolbar row (`EditorToolbar`/`SendMenu` `disabled`; the Destinations toggle button, if it
+      still exists at this point, `disabled` too), and a local non-editable Tiptap instance (no
+      Collaboration extension, no WebSocket) in place of the real editor. `Desktop` itself is
+      otherwise unchanged.
+- [x] `client/src/App.css`: disabled-button styling if the existing `:disabled` rules aren't
+      enough; `LoginDialog`'s popover likely reuses `.account-menu*` styling
+- [x] Test updates: new `EditorToolbar.test.tsx`, `SendMenu.test.tsx`, `App.test.tsx` (signed-out
+      shell renders with every button disabled and the editor non-editable except "Log In", which
+      opens the dialog listing "Sign in with Google" → `/auth/login/google`; dialog never appears
+      unprompted), new `LoginDialog.test.tsx`
+- [x] Update `docs/REQUIREMENTS.md`'s Auth/Identity section to describe the new sign-in entry
+      point
+
+_(Done: commit `1cec70a`. Also fixed a stale `docs/REQUIREMENTS.md` note still calling
+`DestinationsPanel` "dummy data", and updated `docs/TEST-SCRIPTS.md`'s Login script to match the
+new entry point. Verified visually in a local dev run (no Redis configured, so `/api/me` returns
+null and the signed-out shell renders without needing real OAuth) -- shell renders identically,
+everything disabled except "Log In", which opens the dialog correctly. Tests + lint + typecheck +
+build all green.)_
+
+### 2. Channels & Destinations sidebar always visible
+
+`client/src/components/DestinationsPanel.tsx` currently only shows via a toolbar "Destinations"
+toggle button, floating as an absolutely-positioned overlay on top of the editor when open
+(`.destinations-panel` in `client/src/App.css`). Per the user: it should be visible at all times
+instead.
+
+**Group A — make it permanent**
+- [ ] `client/src/App.tsx`: drop the `destinationsPanelOpen` state and the "Destinations" toggle
+      button; always render `DestinationsPanel`
+- [ ] `client/src/components/DestinationsPanel.tsx`: drop the `open` prop and its
+      hidden-when-closed early return -- always mounted now
+- [ ] `client/src/App.css`: `.destinations-panel` changes from an absolutely-positioned overlay to
+      a normal flex sibling of `.desktop-editor` inside `.desktop-main` (sharing width, not
+      covering the editor); drop the now-unused `.destinations-toggle` styles
+- [ ] Test updates: `DestinationsPanel.test.tsx` (drop `open`-prop tests), `App.test.tsx` (drop
+      the toggle test, confirm the sidebar renders unconditionally)
