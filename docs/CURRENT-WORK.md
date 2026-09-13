@@ -84,13 +84,20 @@ toggle button, floating as an absolutely-positioned overlay on top of the editor
 (`.destinations-panel` in `client/src/App.css`). Per the user: it should be visible at all times
 instead.
 
-**Group A — make it permanent**
-- [ ] `client/src/App.tsx`: drop the `destinationsPanelOpen` state and the "Destinations" toggle
+**Group A — make it permanent** ✅
+- [x] `client/src/App.tsx`: drop the `destinationsPanelOpen` state and the "Destinations" toggle
       button; always render `DestinationsPanel`
-- [ ] `client/src/components/DestinationsPanel.tsx`: drop the `open` prop and its
+- [x] `client/src/components/DestinationsPanel.tsx`: drop the `open` prop and its
       hidden-when-closed early return -- always mounted now
-- [ ] `client/src/App.css`: `.destinations-panel` changes from an absolutely-positioned overlay to
+- [x] `client/src/App.css`: `.destinations-panel` changes from an absolutely-positioned overlay to
       a normal flex sibling of `.desktop-editor` inside `.desktop-main` (sharing width, not
       covering the editor); drop the now-unused `.destinations-toggle` styles
-- [ ] Test updates: `DestinationsPanel.test.tsx` (drop `open`-prop tests), `App.test.tsx` (drop
+- [x] Test updates: `DestinationsPanel.test.tsx` (drop `open`-prop tests), `App.test.tsx` (drop
       the toggle test, confirm the sidebar renders unconditionally)
+
+_(Done: commit `32cd22b`. Since the panel is now always mounted (including signed out, where
+`/api/destinations` would 401), `DestinationsPanel` also gained a `disabled` prop -- skips the
+fetch entirely and disables the channel buttons, foreseen in Feature 1's note above. Also updated
+`docs/REQUIREMENTS.md`'s Destination sidebar section and `docs/TEST-SCRIPTS.md`'s script 2, both
+still describing the removed toggle. Verified visually in a local dev run. Tests + lint + typecheck
++ build all green.)_
