@@ -119,8 +119,10 @@ nothing selected offering to create a new one templated from it -- is still open
    Scoped to just those two visible spots, not `package.json`/docs/the repo name.)_
 7. Distinct background colors for the sidebar's Channels vs. Destinations list items (not the
    labels — the list items themselves). _(Landed — `client/src/components/DestinationsPanel.tsx`'s
-   two `<ul>`s each get a distinguishing className; `client/src/App.css` gives Channels a light
-   tint of the app's existing blue accent color, leaving Destinations' neutral gray as it was.)_
+   two `<ul>`s each get a distinguishing className; `client/src/App.css` gives Channels a blue
+   tint and Destinations a green tint of the app's existing accent colors, both clearly visible —
+   neither white/transparent, per follow-up feedback that the first pass's colors read as too
+   close to white.)_
 8. "Start with existing" template should leave `shortLabel` blank (every other field still
    prefills) — the whole point of templating is a fresh, distinguishing label for the new
    destination. _(Landed — `client/src/components/DestinationForm.tsx`'s `applyTemplate` no

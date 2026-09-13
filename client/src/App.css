@@ -392,15 +392,18 @@
   font-size: 0.9rem;
   padding: 0.3rem 0.4rem;
   border-radius: 4px;
-  background: #f7f8fa;
 }
 
-/* Channels vs. Destinations list items get distinct backgrounds so the two
-   lists read as visually separate at a glance (docs/IDEAS.md's Pending
-   item 13) -- Destinations keeps the neutral gray above; Channels gets a
-   light tint of the app's existing blue accent color. */
+/* Channels vs. Destinations list items get distinct, clearly-visible
+   backgrounds (neither white/transparent) so the two lists read as visually
+   separate at a glance (docs/IDEAS.md's Pending item 13) -- tints of the
+   app's existing blue/green accent colors, respectively. */
 .destinations-panel-channels li {
-  background: #eef4ff;
+  background: #dfeaff;
+}
+
+.destinations-panel-destinations li {
+  background: #e2f3e6;
 }
 
 .destinations-panel-empty {
