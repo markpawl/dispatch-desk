@@ -69,6 +69,8 @@ changed, then ask before committing/pushing — never commit unprompted (mirrors
 
 ## Deployment
 
+Live at <https://dispatch-desk-production.up.railway.app/>.
+
 Single Railway service (`railway.toml`), built via the root `Dockerfile` (multi-stage: builds both
 packages, runs the server) — Railway auto-detects and builds from a root `Dockerfile` directly, no
 buildpack config needed. Needs `REDIS_URL` set in the service's variables, wired to the project's
@@ -91,3 +93,5 @@ is decommissioned.
   narrative overview, per-component detail, and the components/connections view.
 - `docs/CURRENT-WORK.md` — scratch file for whatever multi-group implementation plan is active;
   empty when nothing is in flight.
+- `docs/TEST-SCRIPTS.md` — manual test scripts (steps to reproduce + expected behavior), organized
+  by feature; both for already-implemented features and pending ones.
