@@ -14,14 +14,18 @@ const CHANNELS: Channel[] = [
 ]
 
 interface DestinationsPanelProps {
-  open: boolean
+  // Signed out (App.tsx): no point fetching (the API requires a session
+  // anyway), and nothing in the panel should be clickable -- see
+  // docs/CURRENT-WORK.md's "sidebar always visible" plan.
+  disabled?: boolean
 }
 
 // The right-side panel from docs/REQUIREMENTS.md's Destination sidebar flow,
-// showing two lists -- channels (clicking one opens DestinationForm.tsx to
-// create a destination of that type, per docs/CURRENT-WORK.md's Group D2)
-// and destinations (the real, saved instances, deletable here per Group A).
-export function DestinationsPanel({ open }: DestinationsPanelProps) {
+// always visible (not a toggle) showing two lists -- channels (clicking one
+// opens DestinationForm.tsx to create a destination of that type, per
+// docs/CURRENT-WORK.md's Group D2) and destinations (the real, saved
+// instances, deletable here per Group A).
+export function DestinationsPanel({ disabled = false }: DestinationsPanelProps) {
   const [destinations, setDestinations] = useState<SavedDestination[]>([])
   // The one destination (if any) currently showing its inline "delete this?"
   // confirmation in place of its normal row.
@@ -31,15 +35,18 @@ export function DestinationsPanel({ open }: DestinationsPanelProps) {
   const [formChannel, setFormChannel] = useState<DestinationChannel | null>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (disabled) return
     fetch('/api/destinations')
-      .then((response) => response.json())
-      .then((body: { destinations: SavedDestination[] }) => {
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to load destinations')
+        return response.json() as Promise<{ destinations: SavedDestination[] }>
+      })
+      .then((body) => {
         setDestinations(body.destinations)
         setError(null)
       })
       .catch(() => setError('Failed to load destinations'))
-  }, [open])
+  }, [disabled])
 
   const confirmDelete = (id: string) => {
     setDeletingId(id)
@@ -64,8 +71,6 @@ export function DestinationsPanel({ open }: DestinationsPanelProps) {
     setFormChannel(null)
   }
 
-  if (!open) return null
-
   if (formChannel) {
     return (
       <aside className="destinations-panel" aria-label="Create a destination">
@@ -87,7 +92,11 @@ export function DestinationsPanel({ open }: DestinationsPanelProps) {
         <ul>
           {CHANNELS.map((channel) => (
             <li key={channel.id}>
-              <button type="button" onClick={() => setFormChannel(channel.id)}>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setFormChannel(channel.id)}
+              >
                 {channel.name}
               </button>
             </li>

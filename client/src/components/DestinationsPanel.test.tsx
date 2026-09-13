@@ -35,7 +35,7 @@ function stubFetch(destinations: unknown[] = DESTINATIONS, deleteOk = true) {
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
       if (url === '/api/destinations' && (!init || !init.method)) {
-        return Promise.resolve({ json: () => Promise.resolve({ destinations }) })
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ destinations }) })
       }
       if (url === '/api/destinations' && init?.method === 'POST') {
         return Promise.resolve({
@@ -66,13 +66,20 @@ describe('DestinationsPanel', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders nothing when closed', () => {
-    const { container } = render(<DestinationsPanel open={false} />)
-    expect(container).toBeEmptyDOMElement()
+  it('disabled: renders without fetching, channel buttons disabled', () => {
+    const fetchSpy = vi.mocked(fetch)
+    render(<DestinationsPanel disabled />)
+
+    expect(screen.getByRole('heading', { name: 'Channels' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Email' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Google Doc' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Dropbox File' })).toBeDisabled()
+    expect(screen.getByText('None yet')).toBeInTheDocument()
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('shows the Channels list and the real, fetched Destinations list', async () => {
-    render(<DestinationsPanel open />)
+    render(<DestinationsPanel />)
 
     expect(screen.getByRole('heading', { name: 'Channels' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Email' })).toBeInTheDocument()
@@ -86,13 +93,13 @@ describe('DestinationsPanel', () => {
 
   it('shows "None yet" when there are no saved destinations', async () => {
     stubFetch([])
-    render(<DestinationsPanel open />)
+    render(<DestinationsPanel />)
     await waitFor(() => expect(screen.getByText('None yet')).toBeInTheDocument())
   })
 
   it('deletes a destination after an inline confirm', async () => {
     const user = userEvent.setup()
-    render(<DestinationsPanel open />)
+    render(<DestinationsPanel />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Delete Notes' }))
@@ -105,7 +112,7 @@ describe('DestinationsPanel', () => {
 
   it('cancels the confirm without deleting', async () => {
     const user = userEvent.setup()
-    render(<DestinationsPanel open />)
+    render(<DestinationsPanel />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Delete Notes' }))
@@ -117,7 +124,7 @@ describe('DestinationsPanel', () => {
   it('shows an error and keeps the row if the delete request fails', async () => {
     stubFetch(DESTINATIONS, false)
     const user = userEvent.setup()
-    render(<DestinationsPanel open />)
+    render(<DestinationsPanel />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Delete Notes' }))
@@ -131,7 +138,7 @@ describe('DestinationsPanel', () => {
 
   it('clicking a channel opens DestinationForm for it; saving inserts the new destination', async () => {
     const user = userEvent.setup()
-    render(<DestinationsPanel open />)
+    render(<DestinationsPanel />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Email' }))

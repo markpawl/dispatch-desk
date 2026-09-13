@@ -65,14 +65,16 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   belongs to, instead of the user picking manually.
 
 ### Destination sidebar
-- A togglable panel on the right edge of the screen (`client/src/components/DestinationsPanel.tsx`,
-  toggled via a toolbar button) shows two separate lists: **channels** (the three real destination
-  types — Email, Google Doc, Dropbox File) and **destinations** (the saved instances, each shown
-  by its `shortLabel`). Clicking a channel opens `client/src/components/DestinationForm.tsx` to
-  create a destination of that type — see the Send flow section above for what each channel's
-  form asks for, its "start with existing" template picker, and how deleting a destination works.
-  No send-from-sidebar yet — sending only happens through the toolbar's Send popover
-  (`SendMenu.tsx`), which reads from the same saved-destinations list.
+- A panel on the right edge of the screen (`client/src/components/DestinationsPanel.tsx`),
+  **always visible** (no toggle — it shares space with the editor rather than overlaying it) shows
+  two separate lists: **channels** (the three real destination types — Email, Google Doc, Dropbox
+  File) and **destinations** (the saved instances, each shown by its `shortLabel`). Clicking a
+  channel opens `client/src/components/DestinationForm.tsx` to create a destination of that type —
+  see the Send flow section above for what each channel's form asks for, its "start with existing"
+  template picker, and how deleting a destination works. No send-from-sidebar yet — sending only
+  happens through the toolbar's Send popover (`SendMenu.tsx`), which reads from the same
+  saved-destinations list. Signed out, the same sidebar renders but disabled (see Auth/Identity's
+  signed-out entry point above).
 
 ### Purgatory
 - Holds text that doesn't currently match any registered destination. When a new destination is

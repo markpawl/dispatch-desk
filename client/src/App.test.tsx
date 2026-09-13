@@ -85,7 +85,9 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'B' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Destinations' })).toBeDisabled()
+    // The Destinations sidebar is always visible (no toggle), but inert too.
+    expect(screen.getByRole('heading', { name: 'Channels' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Email' })).toBeDisabled()
 
     // No login dialog until "Log In" is clicked.
     expect(screen.queryByRole('link', { name: 'Sign in with Google' })).not.toBeInTheDocument()
@@ -235,21 +237,13 @@ describe('App', () => {
     })
   })
 
-  // The right-side panel from docs/IDEAS.md's Pending item 1 -- its content
-  // (real, fetched destinations; still-dummy channels) is covered in
-  // isolation by components/DestinationsPanel.test.tsx; this just checks the
-  // toolbar toggle wires up to it.
-  it('toggles the channels/destinations panel via the toolbar button', async () => {
+  // The right-side panel from docs/IDEAS.md's Pending item 1 is always
+  // visible now (no toggle) -- its own content is covered in isolation by
+  // components/DestinationsPanel.test.tsx; this just checks it's there.
+  it('always shows the channels/destinations sidebar', async () => {
     render(<App />)
     await screen.findByRole('textbox')
-    expect(screen.queryByRole('heading', { name: 'Channels' })).not.toBeInTheDocument()
-
-    const toggle = screen.getByTitle('Toggle channels & destinations')
-    await userEvent.click(toggle)
     expect(screen.getByRole('heading', { name: 'Channels' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Destinations' })).toBeInTheDocument()
-
-    await userEvent.click(toggle)
-    expect(screen.queryByRole('heading', { name: 'Channels' })).not.toBeInTheDocument()
   })
 })

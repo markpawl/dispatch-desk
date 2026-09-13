@@ -54,7 +54,8 @@ that type; submitting its required fields creates the destination, which then ap
 Destinations list labeled by its `shortLabel`. Picking "start with existing" prefills the form
 from a same-type destination, still editable before Save.
 Steps to reproduce (Email; Google Doc/Dropbox follow the same shape, see note below):
-1. While signed in, click the toolbar's "Destinations" toggle to open the sidebar.
+1. While signed in, confirm the Channels/Destinations sidebar is visible alongside the editor (it's
+   always on, no toggle needed).
 2. Confirm the "Channels" list shows Email, Google Doc, and Dropbox File.
 3. Click "Email".
 4. Confirm a form appears with Address, Short label, and an optional Email subject label fields
