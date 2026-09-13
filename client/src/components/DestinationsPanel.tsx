@@ -1,6 +1,9 @@
+import type { Editor } from '@tiptap/react'
+import { useEditorState } from '@tiptap/react'
 import { useEffect, useState } from 'react'
 import { type DestinationChannel, DestinationForm } from './DestinationForm'
 import { destinationLabel, type SavedDestination } from '../lib/destinations'
+import { sendSelectionToDestination } from '../lib/sendToDestination'
 
 interface Channel {
   id: DestinationChannel
@@ -14,6 +17,11 @@ const CHANNELS: Channel[] = [
 ]
 
 interface DestinationsPanelProps {
+  // Lets a destination row send the current selection directly (see
+  // docs/CURRENT-WORK.md's "Send-from-sidebar" plan) -- null in contexts
+  // with no real editor (there are none today, but mirrors EditorToolbar/
+  // SendMenu's own `editor: Editor | null` prop for consistency).
+  editor: Editor | null
   // Signed out (App.tsx): no point fetching (the API requires a session
   // anyway), and nothing in the panel should be clickable -- see
   // docs/CURRENT-WORK.md's "sidebar always visible" plan.
@@ -24,13 +32,21 @@ interface DestinationsPanelProps {
 // always visible (not a toggle) showing two lists -- channels (clicking one
 // opens DestinationForm.tsx to create a destination of that type, per
 // docs/CURRENT-WORK.md's Group D2) and destinations (the real, saved
-// instances, deletable here per Group A).
-export function DestinationsPanel({ disabled = false }: DestinationsPanelProps) {
+// instances, deletable here per Group A, and sendable directly here per the
+// Send-from-sidebar plan -- a destination row is enabled only with an
+// active text selection, mirroring SendMenu.tsx's Send button).
+export function DestinationsPanel({ editor, disabled = false }: DestinationsPanelProps) {
+  const hasSelection = useEditorState({
+    editor,
+    selector: ({ editor }) => (editor ? !editor.state.selection.empty : false),
+  })
+
   const [destinations, setDestinations] = useState<SavedDestination[]>([])
   // The one destination (if any) currently showing its inline "delete this?"
   // confirmation in place of its normal row.
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [formChannel, setFormChannel] = useState<DestinationChannel | null>(null)
 
@@ -69,6 +85,15 @@ export function DestinationsPanel({ disabled = false }: DestinationsPanelProps) 
   const handleCreated = (destination: SavedDestination) => {
     setDestinations((current) => [...current, destination])
     setFormChannel(null)
+  }
+
+  const sendTo = async (destination: SavedDestination) => {
+    if (!editor) return
+    setSendingId(destination.id)
+    setError(null)
+    const result = await sendSelectionToDestination(editor, destination.id)
+    if (!result.ok) setError(result.error)
+    setSendingId(null)
   }
 
   if (formChannel) {
@@ -126,7 +151,14 @@ export function DestinationsPanel({ disabled = false }: DestinationsPanelProps) 
               </li>
             ) : (
               <li key={destination.id}>
-                <span>{destinationLabel(destination)}</span>
+                <button
+                  type="button"
+                  disabled={disabled || !hasSelection || sendingId === destination.id}
+                  title={hasSelection ? 'Send the selected text here' : 'Select text first'}
+                  onClick={() => sendTo(destination)}
+                >
+                  {destinationLabel(destination)}
+                </button>
                 <button
                   type="button"
                   className="destinations-panel-delete"

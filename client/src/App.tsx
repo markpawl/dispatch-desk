@@ -88,7 +88,7 @@ function SignedOut() {
       </div>
       <div className="desktop-main">
         <EditorContent className="desktop-editor" editor={editor} />
-        <DestinationsPanel disabled />
+        <DestinationsPanel editor={editor} disabled />
       </div>
     </div>
   )
@@ -192,7 +192,7 @@ function Desktop({ user, onSignedOut }: { user: Me; onSignedOut: () => void }) {
       </div>
       <div className="desktop-main">
         <EditorContent className="desktop-editor" editor={editor} />
-        <DestinationsPanel />
+        <DestinationsPanel editor={editor} />
       </div>
       <LinkFollowMenu state={linkMenu} onClose={() => setLinkMenu(null)} />
     </div>

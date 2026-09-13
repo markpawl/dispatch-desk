@@ -3,15 +3,7 @@ import { useEditorState } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
 import { DestinationForm } from './DestinationForm'
 import { destinationLabel, type SavedDestination } from '../lib/destinations'
-import { localDateKey, localTimeLabel } from '../lib/localSendTime'
-
-// Sends by id -- localDate/localTime are read only when it resolves to an
-// email destination, but harmless to always include.
-interface SendBody {
-  destinationId: string
-  localDate: string
-  localTime: string
-}
+import { sendSelectionToDestination } from '../lib/sendToDestination'
 
 interface SendMenuProps {
   editor: Editor | null
@@ -77,43 +69,18 @@ export function SendMenu({ editor, disabled = false }: SendMenuProps) {
     setCreating(false)
   }
 
-  const send = async (target: SendBody) => {
+  const sendTo = async (destination: SavedDestination) => {
     if (!editor) return
-    const { from, to } = editor.state.selection
-    const text = editor.state.doc.textBetween(from, to, '\n')
-    if (!text.trim()) return
-
     setSending(true)
     setError(null)
-    try {
-      const response = await fetch('/api/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, ...target }),
-      })
-      if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null
-        throw new Error(errorBody?.error ?? 'Send failed')
-      }
-      // The Send flow's default post-send action (see docs/REQUIREMENTS.md):
-      // write a log entry (done server-side, above), then delete the sent
-      // text from the desktop -- the desktop stays a transient working
-      // surface, not an archive.
-      editor.chain().focus().deleteSelection().run()
+    const result = await sendSelectionToDestination(editor, destination.id)
+    if (result.ok) {
       setIsOpen(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Send failed')
-    } finally {
-      setSending(false)
+    } else {
+      setError(result.error)
     }
+    setSending(false)
   }
-
-  const sendTo = (destination: SavedDestination) =>
-    send({
-      destinationId: destination.id,
-      localDate: localDateKey(),
-      localTime: localTimeLabel(),
-    })
 
   if (!editor) return null
 

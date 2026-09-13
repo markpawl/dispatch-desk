@@ -1,4 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import type { Editor } from '@tiptap/react'
+import { useEditor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DestinationsPanel } from './DestinationsPanel'
@@ -46,6 +49,9 @@ function stubFetch(destinations: unknown[] = DESTINATIONS, deleteOk = true) {
       if (url.startsWith('/api/destinations/') && init?.method === 'DELETE') {
         return Promise.resolve({ ok: deleteOk })
       }
+      if (url === '/api/send' && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) })
+      }
       if (url === '/api/google/status') {
         return Promise.resolve({ json: () => Promise.resolve({ connected: false }) })
       }
@@ -57,9 +63,30 @@ function stubFetch(destinations: unknown[] = DESTINATIONS, deleteOk = true) {
   )
 }
 
+// A real Tiptap editor (not a hand-rolled fake), same rationale as
+// SendMenu.test.tsx's harness -- useEditorState's selectors need one.
+let capturedEditor: Editor | null = null
+function Harness() {
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: '<p>hello world</p>',
+    onCreate: ({ editor }) => {
+      capturedEditor = editor
+    },
+  })
+  return <DestinationsPanel editor={editor} />
+}
+
+function selectAll() {
+  act(() => {
+    capturedEditor?.commands.selectAll()
+  })
+}
+
 describe('DestinationsPanel', () => {
   beforeEach(() => {
     stubFetch()
+    capturedEditor = null
   })
 
   afterEach(() => {
@@ -68,7 +95,7 @@ describe('DestinationsPanel', () => {
 
   it('disabled: renders without fetching, channel buttons disabled', () => {
     const fetchSpy = vi.mocked(fetch)
-    render(<DestinationsPanel disabled />)
+    render(<DestinationsPanel editor={null} disabled />)
 
     expect(screen.getByRole('heading', { name: 'Channels' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Email' })).toBeDisabled()
@@ -79,7 +106,7 @@ describe('DestinationsPanel', () => {
   })
 
   it('shows the Channels list and the real, fetched Destinations list', async () => {
-    render(<DestinationsPanel />)
+    render(<DestinationsPanel editor={null} />)
 
     expect(screen.getByRole('heading', { name: 'Channels' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Email' })).toBeInTheDocument()
@@ -93,13 +120,85 @@ describe('DestinationsPanel', () => {
 
   it('shows "None yet" when there are no saved destinations', async () => {
     stubFetch([])
-    render(<DestinationsPanel />)
+    render(<DestinationsPanel editor={null} />)
     await waitFor(() => expect(screen.getByText('None yet')).toBeInTheDocument())
+  })
+
+  it('a destination row is disabled with no text selection', async () => {
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Notes' })).toBeDisabled()
+  })
+
+  it('selecting text enables a destination row; clicking it sends and clears the selection', async () => {
+    const sent: RequestInit[] = []
+    stubFetch(DESTINATIONS)
+    vi.mocked(fetch).mockImplementation((url, init) => {
+      const urlStr = String(url)
+      if (urlStr === '/api/send' && init?.method === 'POST') {
+        sent.push(init)
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }) as never
+      }
+      if (urlStr === '/api/destinations' && (!init || !init.method)) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ destinations: DESTINATIONS }),
+        }) as never
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${urlStr}`)) as never
+    })
+
+    const user = userEvent.setup()
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
+    selectAll()
+
+    const row = await waitFor(() => {
+      const button = screen.getByRole('button', { name: 'Notes' })
+      expect(button).toBeEnabled()
+      return button
+    })
+    await user.click(row)
+
+    expect(JSON.parse(sent[0].body as string)).toMatchObject({
+      text: 'hello world',
+      destinationId: 'd1',
+    })
+    await waitFor(() => expect(capturedEditor?.getText()).toBe(''))
+  })
+
+  it('shows an inline error and keeps the selection if sending fails', async () => {
+    vi.mocked(fetch).mockImplementation((url, init) => {
+      const urlStr = String(url)
+      if (urlStr === '/api/send' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ error: 'Send failed' }),
+        }) as never
+      }
+      if (urlStr === '/api/destinations' && (!init || !init.method)) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ destinations: DESTINATIONS }),
+        }) as never
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${urlStr}`)) as never
+    })
+
+    const user = userEvent.setup()
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
+    selectAll()
+
+    await user.click(await waitFor(() => screen.getByRole('button', { name: 'Notes' })))
+
+    expect(await screen.findByText('Send failed')).toBeInTheDocument()
+    expect(capturedEditor?.getText()).toBe('hello world')
   })
 
   it('deletes a destination after an inline confirm', async () => {
     const user = userEvent.setup()
-    render(<DestinationsPanel />)
+    render(<DestinationsPanel editor={null} />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Delete Notes' }))
@@ -112,7 +211,7 @@ describe('DestinationsPanel', () => {
 
   it('cancels the confirm without deleting', async () => {
     const user = userEvent.setup()
-    render(<DestinationsPanel />)
+    render(<DestinationsPanel editor={null} />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Delete Notes' }))
@@ -124,7 +223,7 @@ describe('DestinationsPanel', () => {
   it('shows an error and keeps the row if the delete request fails', async () => {
     stubFetch(DESTINATIONS, false)
     const user = userEvent.setup()
-    render(<DestinationsPanel />)
+    render(<DestinationsPanel editor={null} />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Delete Notes' }))
@@ -138,7 +237,7 @@ describe('DestinationsPanel', () => {
 
   it('clicking a channel opens DestinationForm for it; saving inserts the new destination', async () => {
     const user = userEvent.setup()
-    render(<DestinationsPanel />)
+    render(<DestinationsPanel editor={null} />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Email' }))

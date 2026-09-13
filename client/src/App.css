@@ -417,6 +417,15 @@
   color: #1f6feb;
 }
 
+.destinations-panel li button:not(.destinations-panel-delete):disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.destinations-panel li button:not(.destinations-panel-delete):disabled:hover {
+  color: inherit;
+}
+
 .destinations-panel-delete {
   flex: none;
   width: 1.4rem;

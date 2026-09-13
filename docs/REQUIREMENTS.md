@@ -39,12 +39,16 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   Google Doc/Dropbox auth is a real in-app OAuth flow (`/auth/connect/google` /
   `/auth/connect/dropbox`, per-user tokens in Redis — see Auth/Identity above; separate from "Sign
   in with Google", which grants no Drive/Docs/Gmail access).
-- **Sending**: the toolbar "Send" button (`client/src/components/SendMenu.tsx`) is enabled only
-  with a non-empty selection; its popover lists saved destinations by their `shortLabel` and sends
-  to the clicked one by id (`POST /api/send`). With no destinations saved yet, it opens
-  `DestinationForm` itself (channel picker first) instead of showing an empty list — the new
-  destination gets a "Send from ⟨shortLabel⟩" button once created, so the very first destination
-  doesn't require a separate trip to the sidebar.
+- **Sending**: two entry points, both sending by destination id (`POST /api/send`) via a shared
+  `client/src/lib/sendToDestination.ts` helper. The toolbar "Send" button
+  (`client/src/components/SendMenu.tsx`) is enabled only with a non-empty selection; its popover
+  lists saved destinations by their `shortLabel` and sends to the clicked one. With no
+  destinations saved yet, it opens `DestinationForm` itself (channel picker first) instead of
+  showing an empty list — the new destination gets a "Send from ⟨shortLabel⟩" button once
+  created, so the very first destination doesn't require a separate trip to the sidebar.
+  Separately, each row in the destination sidebar's Destinations list (see Destination sidebar
+  below) is itself a send target — enabled only with an active selection, same as the Send
+  button — for sending directly from the sidebar without opening the popover at all.
 - **Google Doc**: appends text to the end of the doc's body (`server/src/googleDocs.ts`).
 - **Dropbox file**: scoped to **text-appendable files only** (`.txt`/`.md`) — since Dropbox has no
   native append, a send is download → prepend a newline + the text → re-upload (overwrite;
@@ -71,10 +75,10 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   File) and **destinations** (the saved instances, each shown by its `shortLabel`). Clicking a
   channel opens `client/src/components/DestinationForm.tsx` to create a destination of that type —
   see the Send flow section above for what each channel's form asks for, its "start with existing"
-  template picker, and how deleting a destination works. No send-from-sidebar yet — sending only
-  happens through the toolbar's Send popover (`SendMenu.tsx`), which reads from the same
-  saved-destinations list. Signed out, the same sidebar renders but disabled (see Auth/Identity's
-  signed-out entry point above).
+  template picker, and how deleting a destination works. Each destination row doubles as a send
+  target (see the Send flow section's Sending bullet above) — clicking it sends the current
+  selection there directly, no need to open the toolbar's Send popover. Signed out, the same
+  sidebar renders but disabled (see Auth/Identity's signed-out entry point above).
 
 ### Purgatory
 - Holds text that doesn't currently match any registered destination. When a new destination is

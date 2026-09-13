@@ -98,4 +98,20 @@ Steps to reproduce:
    "Send" again; confirm it opens the create-destination form (channel picker) directly, and that
    saving a destination there offers a "Send from <label>" button that sends immediately.
 
+4. Send content from the sidebar: each row in the destination sidebar's Destinations list is
+itself a send target, not just the toolbar's Send popover.
+Expected behavior: a destination row in the sidebar is disabled with no active text selection,
+same as the toolbar's Send button; with a selection, it's enabled, and clicking it sends the
+selected text to that destination directly (no popover), then deletes the sent text from the
+desktop. A failed send shows an inline error in the sidebar without losing the selection.
+Steps to reproduce:
+1. With no text selected, confirm every row in the sidebar's Destinations list is disabled.
+2. Select some text on the desktop.
+3. Confirm the Destinations rows are now enabled.
+4. Click one of them.
+5. Confirm the selected text is removed from the desktop (same post-send behavior as script 3).
+6. Select more text and click a destination again while a send to it is already resolving (or
+   simulate a failure, e.g. a destination missing its Google/Dropbox connection); confirm an
+   inline error appears in the sidebar and the selection is left in place.
+
 #### Pending
