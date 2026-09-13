@@ -69,27 +69,14 @@ _Ordered easiest to hardest to implement._
    section for the current decision.
 9. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
 10. [later] dispatch-desk - client - editor-component: alternative to tiptap, Quill: A lightweight, drop-in rich text editor that provides the exact standard formatting options (bold, italics, underline, lists, links, attachments) seen in Calendar.
-11. [pending] each destination should have a short label chosen by the user and a descriptive label describing the path for example: 
-short-label: "mom's email"
-descriptive-label: `{channel-name}, {parm1}, {parm2}, {parm3} ...`
-the "destinations" list shows the short-label and pops up the descriptive-label on hover.
-12. [pending] dispatch-desktop - app title - main page: name in header should be "Dispatch Desktop" not "Dispatch Desk"
-13. [pending] dispatch-desktop - background color of channels should be different from bg color for destinations (not the labels but the list itmes.
-14. [pending] dispatch-desktop - destination-buttons - behavior when preview area text is selected:
+11. [pending] dispatch-desktop - destination-buttons - behavior when preview area text is selected:
 if text is selected and a destination is clicked on then the data is sent to the destination.
 If text is NOT selected and a destination is clicked, a dialog appears, "create new destination using this one as a template?", choosing yes pops up the destination parameter form filled out with info from the selected existing destination
 _(First half landed: selecting text enables a destination row in the sidebar, and clicking it
 sends -- see docs/REQUIREMENTS.md's Send flow/Destination sidebar sections and
 `client/src/components/DestinationsPanel.tsx`. The second half -- clicking a destination with
 nothing selected offering to create a new one templated from it -- is still open.)_
-15. [pending] dispatch-desktop - when creating a destination, choose "start with existing", in the form that comes up after choosing an existing destination, all fields except short-label should be prefilled.
-16. [pending] dispatch-desktop - login vs connected - google: i sucessfully log in to google and I successfully connect so that I can send using the google api. sometimes the auth token for using the api gets stale and errors come up when calling google endpoints. In these cases the end users needs a way to "refresh google connection", or "disconnect-from-google-api" and "connect-to-google-api"
-
-
-
-
-
-
+12. [pending] dispatch-desktop - login vs connected - google: i sucessfully log in to google and I successfully connect so that I can send using the google api. sometimes the auth token for using the api gets stale and errors come up when calling google endpoints. In these cases the end users needs a way to "refresh google connection", or "disconnect-from-google-api" and "connect-to-google-api"
 
 #### Addressed
 
@@ -120,3 +107,21 @@ nothing selected offering to create a new one templated from it -- is still open
    are deletable with an inline confirm. Channels are the three destinations that exist today
    (Google Doc, Dropbox file, Email) — still direct API integrations, not the still-pending MCP
    Host; see Pending item 4 above.)_
+5. Destination short-label + descriptive-label: each destination has a user-chosen short-label
+   shown in the list, and a descriptive label (channel name + its underlying parameters) that pops
+   up on hover. _(Landed as a computed-not-stored value — `destinationDescription()` in
+   `client/src/lib/destinations.ts` — rather than a separately stored/entered field, since it's
+   fully derivable from the destination's existing type-specific fields. Shown via the
+   `title` attribute on each row in `client/src/components/DestinationsPanel.tsx`, combined with
+   the existing selection hint.)_
+6. App title: header should read "Dispatch Desktop", not "Dispatch Desk". _(Landed — the on-screen
+   `<h1>` (both signed-in and signed-out) and the browser tab's `<title>` in `client/index.html`.
+   Scoped to just those two visible spots, not `package.json`/docs/the repo name.)_
+7. Distinct background colors for the sidebar's Channels vs. Destinations list items (not the
+   labels — the list items themselves). _(Landed — `client/src/components/DestinationsPanel.tsx`'s
+   two `<ul>`s each get a distinguishing className; `client/src/App.css` gives Channels a light
+   tint of the app's existing blue accent color, leaving Destinations' neutral gray as it was.)_
+8. "Start with existing" template should leave `shortLabel` blank (every other field still
+   prefills) — the whole point of templating is a fresh, distinguishing label for the new
+   destination. _(Landed — `client/src/components/DestinationForm.tsx`'s `applyTemplate` no
+   longer copies the template's `shortLabel`.)_

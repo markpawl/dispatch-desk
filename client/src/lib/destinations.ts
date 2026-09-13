@@ -18,3 +18,27 @@ export type SavedDestination =
 export function destinationLabel(destination: SavedDestination): string {
   return destination.shortLabel
 }
+
+const CHANNEL_NAME: Record<SavedDestination['type'], string> = {
+  'google-doc': 'Google Doc',
+  'dropbox-file': 'Dropbox File',
+  email: 'Email',
+}
+
+// A longer, computed-not-stored description of what a destination actually
+// points at -- channel name plus its underlying parameters -- shown as a
+// hover tooltip alongside the short, user-chosen shortLabel in the list
+// (see docs/IDEAS.md's Pending item 11).
+export function destinationDescription(destination: SavedDestination): string {
+  const channel = CHANNEL_NAME[destination.type]
+  switch (destination.type) {
+    case 'google-doc':
+      return `${channel}, ${destination.docName}`
+    case 'dropbox-file':
+      return `${channel}, ${destination.path}`
+    case 'email':
+      return destination.emailSubjectLabel
+        ? `${channel}, ${destination.address}, ${destination.emailSubjectLabel}`
+        : `${channel}, ${destination.address}`
+  }
+}

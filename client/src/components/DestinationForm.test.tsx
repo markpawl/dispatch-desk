@@ -207,7 +207,8 @@ describe('DestinationForm', () => {
     await user.selectOptions(screen.getByLabelText('Start with existing'), 'e1')
 
     expect(screen.getByLabelText('Address')).toHaveValue('existing@example.com')
-    expect(screen.getByLabelText('Short label')).toHaveValue('Existing')
+    // shortLabel is deliberately left blank -- see docs/IDEAS.md's Pending item 15.
+    expect(screen.getByLabelText('Short label')).toHaveValue('')
     expect(screen.getByLabelText('Email subject label (optional)')).toHaveValue(
       'Existing Subject',
     )

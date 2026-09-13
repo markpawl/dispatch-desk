@@ -127,7 +127,11 @@ describe('DestinationsPanel', () => {
   it('a destination row is disabled with no text selection', async () => {
     render(<Harness />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: 'Notes' })).toBeDisabled()
+    const row = screen.getByRole('button', { name: 'Notes' })
+    expect(row).toBeDisabled()
+    // The hover tooltip (docs/IDEAS.md's Pending item 11) combines the
+    // computed description with the selection hint.
+    expect(row).toHaveAttribute('title', 'Google Doc, Notes — select text first')
   })
 
   it('selecting text enables a destination row; clicking it sends and clears the selection', async () => {

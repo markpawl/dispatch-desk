@@ -395,6 +395,14 @@
   background: #f7f8fa;
 }
 
+/* Channels vs. Destinations list items get distinct backgrounds so the two
+   lists read as visually separate at a glance (docs/IDEAS.md's Pending
+   item 13) -- Destinations keeps the neutral gray above; Channels gets a
+   light tint of the app's existing blue accent color. */
+.destinations-panel-channels li {
+  background: #eef4ff;
+}
+
 .destinations-panel-empty {
   font-size: 0.8rem;
   color: #888;

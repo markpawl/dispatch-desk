@@ -3,15 +3,23 @@ import StarterKit from '@tiptap/starter-kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { sendSelectionToDestination } from './sendToDestination'
 
+// Real (uncollaborated) Tiptap editors, destroyed after each test -- an
+// undestroyed one leaves a DOMObserver timer running that fires after
+// jsdom's torn down, an unhandled error that (harmlessly) pollutes later
+// test output.
+let editors: Editor[] = []
 function makeEditor(content: string) {
   const editor = new Editor({ extensions: [StarterKit], content })
   editor.commands.selectAll()
+  editors.push(editor)
   return editor
 }
 
 describe('sendSelectionToDestination', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    for (const editor of editors) editor.destroy()
+    editors = []
   })
 
   it('returns an error without touching the network when the selection is empty', async () => {

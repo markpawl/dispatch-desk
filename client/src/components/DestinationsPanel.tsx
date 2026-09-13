@@ -2,7 +2,7 @@ import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
 import { useEffect, useState } from 'react'
 import { type DestinationChannel, DestinationForm } from './DestinationForm'
-import { destinationLabel, type SavedDestination } from '../lib/destinations'
+import { destinationDescription, destinationLabel, type SavedDestination } from '../lib/destinations'
 import { sendSelectionToDestination } from '../lib/sendToDestination'
 
 interface Channel {
@@ -114,7 +114,7 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
     <aside className="destinations-panel" aria-label="Channels and destinations">
       <section>
         <h2>Channels</h2>
-        <ul>
+        <ul className="destinations-panel-channels">
           {CHANNELS.map((channel) => (
             <li key={channel.id}>
               <button
@@ -131,7 +131,7 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
       <section>
         <h2>Destinations</h2>
         {destinations.length === 0 && <div className="destinations-panel-empty">None yet</div>}
-        <ul>
+        <ul className="destinations-panel-destinations">
           {destinations.map((destination) =>
             confirmingId === destination.id ? (
               <li key={destination.id} className="destinations-panel-confirm">
@@ -154,7 +154,9 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
                 <button
                   type="button"
                   disabled={disabled || !hasSelection || sendingId === destination.id}
-                  title={hasSelection ? 'Send the selected text here' : 'Select text first'}
+                  title={`${destinationDescription(destination)} — ${
+                    hasSelection ? 'send the selected text here' : 'select text first'
+                  }`}
                   onClick={() => sendTo(destination)}
                 >
                   {destinationLabel(destination)}

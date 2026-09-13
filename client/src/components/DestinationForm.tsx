@@ -97,7 +97,10 @@ export function DestinationForm({
     setTemplateId(id)
     const template = templatesForChannel.find((destination) => destination.id === id)
     if (!template) return
-    setShortLabel(template.shortLabel)
+    // shortLabel is deliberately left as-is (not prefilled) -- the whole
+    // point of templating is a fresh, distinguishing label for the new
+    // destination; every other field still prefills below (see
+    // docs/IDEAS.md's Pending item 15).
     if (template.type === 'email') {
       setAddress(template.address)
       setEmailSubjectLabel(template.emailSubjectLabel ?? '')

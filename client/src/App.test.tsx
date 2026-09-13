@@ -68,7 +68,7 @@ describe('App', () => {
   it('renders the desktop editor and reflects typed text', async () => {
     render(<App />)
     const editor = await screen.findByRole('textbox')
-    expect(screen.getByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Dispatch Desktop' })).toBeInTheDocument()
 
     await userEvent.type(editor, 'hello')
 
@@ -82,7 +82,7 @@ describe('App', () => {
     // Same shell as signed-in: header, toolbar, editor area -- just inert.
     const editor = await screen.findByRole('textbox')
     expect(editor).toHaveAttribute('contenteditable', 'false')
-    expect(screen.getByRole('heading', { name: 'Dispatch Desk' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Dispatch Desktop' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'B' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
     // The Destinations sidebar is always visible (no toggle), but inert too.

@@ -74,7 +74,7 @@ function SignedOut() {
   return (
     <div className="desktop">
       <header className="desktop-header">
-        <h1>Dispatch Desk</h1>
+        <h1>Dispatch Desktop</h1>
         <div className="desktop-header-status">
           <span className="version" title="When this deployment was built">
             {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
@@ -169,7 +169,7 @@ function Desktop({ user, onSignedOut }: { user: Me; onSignedOut: () => void }) {
   return (
     <div className="desktop">
       <header className="desktop-header">
-        <h1>Dispatch Desk</h1>
+        <h1>Dispatch Desktop</h1>
         <div className="desktop-header-status">
           <span className="version" title="When this deployment was built">
             {buildTimestamp ? buildTimestamp.toLocaleString() : 'dev'}
