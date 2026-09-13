@@ -47,8 +47,13 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   showing an empty list — the new destination gets a "Send from ⟨shortLabel⟩" button once
   created, so the very first destination doesn't require a separate trip to the sidebar.
   Separately, each row in the destination sidebar's Destinations list (see Destination sidebar
-  below) is itself a send target — enabled only with an active selection, same as the Send
-  button — for sending directly from the sidebar without opening the popover at all.
+  below) is itself a send target — clicking it with an active selection sends directly, without
+  opening the popover at all; clicking it with **no** selection instead offers to create a new
+  destination templated from that one (see Destination sidebar below). A failed send against a
+  destination that rides on the Google connection (Google Doc, or Email via Gmail) has a fixed
+  hint appended pointing at `AccountMenu.tsx`'s disconnect/reconnect flow
+  (`client/src/lib/destinations.ts`'s `sendErrorMessage`) — the server has no way to tell a stale
+  Google token apart from any other failure today, so this is a hint, not a detection.
 - **Google Doc**: appends text to the end of the doc's body (`server/src/googleDocs.ts`).
 - **Dropbox file**: scoped to **text-appendable files only** (`.txt`/`.md`) — since Dropbox has no
   native append, a send is download → prepend a newline + the text → re-upload (overwrite;
@@ -76,9 +81,12 @@ Sections are filled in as decisions are made; nothing here is final until noted.
   channel opens `client/src/components/DestinationForm.tsx` to create a destination of that type —
   see the Send flow section above for what each channel's form asks for, its "start with existing"
   template picker, and how deleting a destination works. Each destination row doubles as a send
-  target (see the Send flow section's Sending bullet above) — clicking it sends the current
-  selection there directly, no need to open the toolbar's Send popover. Signed out, the same
-  sidebar renders but disabled (see Auth/Identity's signed-out entry point above).
+  target (see the Send flow section's Sending bullet above) — clicking it with a selection sends
+  the current text there directly, no need to open the toolbar's Send popover; clicking it with no
+  selection shows an inline "create a new destination like this one?" confirm, and accepting opens
+  `DestinationForm` pre-templated from that specific destination (the same "start with existing"
+  machinery, just pre-chosen rather than picked from the dropdown). Signed out, the same sidebar
+  renders but disabled (see Auth/Identity's signed-out entry point above).
 
 ### Purgatory
 - Holds text that doesn't currently match any registered destination. When a new destination is

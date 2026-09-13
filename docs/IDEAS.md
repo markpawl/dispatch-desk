@@ -69,15 +69,6 @@ _Ordered easiest to hardest to implement._
    section for the current decision.
 9. [later] background process that periodically determines where things will go and sends them there. decision is based on historical data about where the user sent similar data before.
 10. [later] dispatch-desk - client - editor-component: alternative to tiptap, Quill: A lightweight, drop-in rich text editor that provides the exact standard formatting options (bold, italics, underline, lists, links, attachments) seen in Calendar.
-11. [pending] dispatch-desktop - destination-buttons - behavior when preview area text is selected:
-if text is selected and a destination is clicked on then the data is sent to the destination.
-If text is NOT selected and a destination is clicked, a dialog appears, "create new destination using this one as a template?", choosing yes pops up the destination parameter form filled out with info from the selected existing destination
-_(First half landed: selecting text enables a destination row in the sidebar, and clicking it
-sends -- see docs/REQUIREMENTS.md's Send flow/Destination sidebar sections and
-`client/src/components/DestinationsPanel.tsx`. The second half -- clicking a destination with
-nothing selected offering to create a new one templated from it -- is still open.)_
-12. [pending] dispatch-desktop - login vs connected - google: i sucessfully log in to google and I successfully connect so that I can send using the google api. sometimes the auth token for using the api gets stale and errors come up when calling google endpoints. In these cases the end users needs a way to "refresh google connection", or "disconnect-from-google-api" and "connect-to-google-api"
-
 #### Addressed
 
 1. Destinations - MCP integration: Model each destination as an MCP (Model Context Protocol) tool
@@ -127,3 +118,22 @@ nothing selected offering to create a new one templated from it -- is still open
    prefills) — the whole point of templating is a fresh, distinguishing label for the new
    destination. _(Landed — `client/src/components/DestinationForm.tsx`'s `applyTemplate` no
    longer copies the template's `shortLabel`.)_
+9. [pending] Destination-button behavior when preview area text is selected: if text is selected
+   and a destination is clicked, send to it; if NOT selected and a destination is clicked, offer
+   "create new destination using this one as a template?", pre-filling the destination form from
+   the clicked one if accepted. _(Landed in two parts. First half: selecting text enables a
+   destination row in the sidebar, and clicking it sends. Second half (this pass): clicking a row
+   with nothing selected shows an inline "create a new destination like this one?" confirm;
+   accepting opens `DestinationForm` pre-templated from that specific destination via its new
+   `initialTemplateId` prop -- see docs/REQUIREMENTS.md's Send flow/Destination sidebar sections
+   and `client/src/components/DestinationsPanel.tsx`/`DestinationForm.tsx`.)_
+10. [pending] Google login vs. connected: a way to "refresh google connection" /
+    "disconnect-from-google-api" and "connect-to-google-api" for when the Google API auth token
+    goes stale. _(Landed in two parts, one pre-existing. The connect/disconnect flow itself
+    already existed — `client/src/components/AccountMenu.tsx`'s per-provider Connect
+    link/Disconnect button, from the per-user-accounts plan's Group E — so recovering from a
+    stale connection was already possible: disconnect, then reconnect. New this pass: a send
+    failure against a Google-connection-backed destination (Google Doc, or Email via Gmail) now
+    surfaces a fixed hint pointing at that flow (`client/src/lib/destinations.ts`'s
+    `sendErrorMessage`) rather than a bare error, since the server has no way to positively detect
+    a stale token as distinct from any other failure.)_

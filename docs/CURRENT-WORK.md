@@ -31,3 +31,7 @@ nothing is in flight. **The rules below survive every clear-out — never remove
 ## Plan
 
 _(none active)_
+
+_(Last plan: IDEAS.md items 11 (2nd half) + 12 — destination-row "template from" flow, Google
+reconnect hint. Both groups done: commit 4825f21. Docs reconciled (REQUIREMENTS.md's Send
+flow/Destination sidebar sections, IDEAS.md's items 11/12 moved to Addressed) same pass.)_
