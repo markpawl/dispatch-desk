@@ -232,6 +232,27 @@ describe('DestinationForm', () => {
     expect(screen.getByLabelText('Short label')).toHaveValue('Renamed')
   })
 
+  it('initialTemplateId pre-applies that specific destination as the template', async () => {
+    stubFetch()
+    render(
+      <DestinationForm
+        destinations={[EMAIL_TEMPLATE]}
+        initialChannel="email"
+        initialTemplateId="e1"
+        onCreated={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+    // Pre-applied without the user opening "start with existing" themselves.
+    expect(await screen.findByLabelText('Address')).toHaveValue('existing@example.com')
+    expect(screen.getByLabelText('Email subject label (optional)')).toHaveValue(
+      'Existing Subject',
+    )
+    // shortLabel still comes out blank -- see docs/IDEAS.md's Pending item 8.
+    expect(screen.getByLabelText('Short label')).toHaveValue('')
+    expect(screen.getByLabelText('Start with existing')).toHaveValue('e1')
+  })
+
   it('does not offer "start with existing" when there are no same-type destinations', () => {
     stubFetch()
     render(

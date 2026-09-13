@@ -2,7 +2,7 @@ import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
 import { DestinationForm } from './DestinationForm'
-import { destinationLabel, type SavedDestination } from '../lib/destinations'
+import { destinationLabel, sendErrorMessage, type SavedDestination } from '../lib/destinations'
 import { sendSelectionToDestination } from '../lib/sendToDestination'
 
 interface SendMenuProps {
@@ -77,7 +77,7 @@ export function SendMenu({ editor, disabled = false }: SendMenuProps) {
     if (result.ok) {
       setIsOpen(false)
     } else {
-      setError(result.error)
+      setError(sendErrorMessage(result.error, destination))
     }
     setSending(false)
   }

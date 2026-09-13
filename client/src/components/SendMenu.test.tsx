@@ -161,7 +161,13 @@ describe('SendMenu', () => {
     const destinationButton = await screen.findByRole('button', { name: 'Meeting Notes' })
     await userEvent.click(destinationButton)
 
-    expect(await screen.findByText('Google is not connected')).toBeInTheDocument()
+    // The destination is a google-doc -- the reconnect hint
+    // (client/src/lib/destinations.ts's sendErrorMessage) is appended.
+    expect(
+      await screen.findByText(
+        'Google is not connected — try reconnecting Google (account menu, top right) if this keeps happening',
+      ),
+    ).toBeInTheDocument()
     expect(capturedEditor?.getText()).toBe('hello world')
   })
 

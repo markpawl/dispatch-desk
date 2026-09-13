@@ -17,6 +17,12 @@ interface DestinationFormProps {
   // picker below and goes straight to that channel's form. Omitted for
   // SendMenu's "no destinations yet" flow, which shows the picker first.
   initialChannel?: DestinationChannel
+  // Preset from DestinationsPanel's "create a new destination like this
+  // one?" row confirm (docs/IDEAS.md's Pending item 11) -- pre-applies that
+  // specific destination as the "start with existing" template, same as if
+  // the user had opened the picker and chosen it themselves. Requires
+  // `initialChannel` to be that destination's type.
+  initialTemplateId?: string
   onCreated: (destination: SavedDestination) => void
   onCancel: () => void
 }
@@ -30,16 +36,42 @@ interface DestinationFormProps {
 export function DestinationForm({
   destinations,
   initialChannel,
+  initialTemplateId,
   onCreated,
   onCancel,
 }: DestinationFormProps) {
+  // Resolved once, up front, rather than via a mount effect -- initialTemplateId
+  // only ever names a destination of initialChannel's own type (see the prop's
+  // doc comment), so there's nothing async to wait on.
+  const initialTemplate =
+    initialChannel && initialTemplateId
+      ? destinations.find(
+          (destination) =>
+            destination.id === initialTemplateId && destination.type === initialChannel,
+        )
+      : undefined
+
   const [channel, setChannel] = useState<DestinationChannel | null>(initialChannel ?? null)
-  const [showTemplates, setShowTemplates] = useState(false)
-  const [templateId, setTemplateId] = useState('')
+  const [showTemplates, setShowTemplates] = useState(Boolean(initialTemplate))
+  const [templateId, setTemplateId] = useState(initialTemplate?.id ?? '')
+  // shortLabel is deliberately left blank even when templated -- the whole
+  // point of templating is a fresh, distinguishing label for the new
+  // destination; every other field still prefills (see docs/IDEAS.md's
+  // Pending item 15).
   const [shortLabel, setShortLabel] = useState('')
-  const [address, setAddress] = useState('')
-  const [emailSubjectLabel, setEmailSubjectLabel] = useState('')
-  const [picked, setPicked] = useState<PickedFile | null>(null)
+  const [address, setAddress] = useState(
+    initialTemplate?.type === 'email' ? initialTemplate.address : '',
+  )
+  const [emailSubjectLabel, setEmailSubjectLabel] = useState(
+    initialTemplate?.type === 'email' ? (initialTemplate.emailSubjectLabel ?? '') : '',
+  )
+  const [picked, setPicked] = useState<PickedFile | null>(
+    initialTemplate?.type === 'google-doc'
+      ? { ref: initialTemplate.docId, name: initialTemplate.docName }
+      : initialTemplate?.type === 'dropbox-file'
+        ? { ref: initialTemplate.path, name: initialTemplate.name }
+        : null,
+  )
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PickedFile[]>([])
   const [searching, setSearching] = useState(false)

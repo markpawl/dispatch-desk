@@ -33,7 +33,7 @@ const CREATED_EMAIL_DESTINATION = {
   createdAt: '',
 }
 
-function stubFetch(destinations: unknown[] = DESTINATIONS, deleteOk = true) {
+function stubFetch(destinations: unknown[] = DESTINATIONS, deleteOk = true, googleConnected = false) {
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
@@ -53,7 +53,7 @@ function stubFetch(destinations: unknown[] = DESTINATIONS, deleteOk = true) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) })
       }
       if (url === '/api/google/status') {
-        return Promise.resolve({ json: () => Promise.resolve({ connected: false }) })
+        return Promise.resolve({ json: () => Promise.resolve({ connected: googleConnected }) })
       }
       if (url === '/api/dropbox/status') {
         return Promise.resolve({ json: () => Promise.resolve({ connected: false }) })
@@ -124,14 +124,47 @@ describe('DestinationsPanel', () => {
     await waitFor(() => expect(screen.getByText('None yet')).toBeInTheDocument())
   })
 
-  it('a destination row is disabled with no text selection', async () => {
+  it('a destination row is enabled with no text selection, and offers to template from it', async () => {
+    const user = userEvent.setup()
     render(<Harness />)
     await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
     const row = screen.getByRole('button', { name: 'Notes' })
-    expect(row).toBeDisabled()
+    expect(row).toBeEnabled()
     // The hover tooltip (docs/IDEAS.md's Pending item 11) combines the
-    // computed description with the selection hint.
-    expect(row).toHaveAttribute('title', 'Google Doc, Notes — select text first')
+    // computed description with the current click-behavior hint.
+    expect(row).toHaveAttribute(
+      'title',
+      'Google Doc, Notes — click to create a new destination like this one',
+    )
+
+    await user.click(row)
+    expect(screen.getByText('Create a new destination like "Notes"?')).toBeInTheDocument()
+  })
+
+  it('canceling the "create like this" confirm leaves the row as-is', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Notes' }))
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText('Create a new destination like "Notes"?')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument()
+  })
+
+  it('confirming "create like this" opens the form pre-filled from that destination', async () => {
+    stubFetch(DESTINATIONS, true, true)
+    const user = userEvent.setup()
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByText('Notes')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Notes' }))
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    expect(screen.getByRole('heading', { name: 'New Google Doc destination' })).toBeInTheDocument()
+    // Templated from "Notes" (a google-doc destination): the picked doc's
+    // name shows up in the "Short label (picked: ...)" field's label, and
+    // shortLabel itself is left blank (docs/IDEAS.md's Pending item 8).
+    expect(screen.getByLabelText('Short label (picked: Notes)')).toHaveValue('')
   })
 
   it('selecting text enables a destination row; clicking it sends and clears the selection', async () => {
@@ -196,7 +229,13 @@ describe('DestinationsPanel', () => {
 
     await user.click(await waitFor(() => screen.getByRole('button', { name: 'Notes' })))
 
-    expect(await screen.findByText('Send failed')).toBeInTheDocument()
+    // "Notes" is a google-doc destination -- the reconnect hint
+    // (client/src/lib/destinations.ts's sendErrorMessage) is appended.
+    expect(
+      await screen.findByText(
+        'Send failed — try reconnecting Google (account menu, top right) if this keeps happening',
+      ),
+    ).toBeInTheDocument()
     expect(capturedEditor?.getText()).toBe('hello world')
   })
 

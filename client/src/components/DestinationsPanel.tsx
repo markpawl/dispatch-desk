@@ -2,7 +2,12 @@ import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
 import { useEffect, useState } from 'react'
 import { type DestinationChannel, DestinationForm } from './DestinationForm'
-import { destinationDescription, destinationLabel, type SavedDestination } from '../lib/destinations'
+import {
+  destinationDescription,
+  destinationLabel,
+  sendErrorMessage,
+  type SavedDestination,
+} from '../lib/destinations'
 import { sendSelectionToDestination } from '../lib/sendToDestination'
 
 interface Channel {
@@ -49,6 +54,13 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [formChannel, setFormChannel] = useState<DestinationChannel | null>(null)
+  // The destination (if any) a just-opened form should template itself from
+  // -- set when the "create like this one?" confirm below is accepted.
+  const [templateSourceId, setTemplateSourceId] = useState<string | null>(null)
+  // The one destination (if any) currently showing its inline "create a new
+  // destination like this one?" confirmation -- offered when its row is
+  // clicked with no text selected (docs/IDEAS.md's Pending item 11).
+  const [templatingId, setTemplatingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (disabled) return
@@ -85,6 +97,12 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
   const handleCreated = (destination: SavedDestination) => {
     setDestinations((current) => [...current, destination])
     setFormChannel(null)
+    setTemplateSourceId(null)
+  }
+
+  const cancelForm = () => {
+    setFormChannel(null)
+    setTemplateSourceId(null)
   }
 
   const sendTo = async (destination: SavedDestination) => {
@@ -92,8 +110,26 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
     setSendingId(destination.id)
     setError(null)
     const result = await sendSelectionToDestination(editor, destination.id)
-    if (!result.ok) setError(result.error)
+    if (!result.ok) setError(sendErrorMessage(result.error, destination))
     setSendingId(null)
+  }
+
+  // A row click either sends (selection present) or offers to template a
+  // new destination from it (no selection) -- see docs/IDEAS.md's Pending
+  // item 11.
+  const handleRowClick = (destination: SavedDestination) => {
+    if (hasSelection) {
+      sendTo(destination)
+    } else {
+      setConfirmingId(null)
+      setTemplatingId(destination.id)
+    }
+  }
+
+  const startTemplate = (destination: SavedDestination) => {
+    setTemplatingId(null)
+    setTemplateSourceId(destination.id)
+    setFormChannel(destination.type)
   }
 
   if (formChannel) {
@@ -103,8 +139,9 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
         <DestinationForm
           destinations={destinations}
           initialChannel={formChannel}
+          initialTemplateId={templateSourceId ?? undefined}
           onCreated={handleCreated}
-          onCancel={() => setFormChannel(null)}
+          onCancel={cancelForm}
         />
       </aside>
     )
@@ -149,15 +186,29 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
                   </button>
                 </div>
               </li>
+            ) : templatingId === destination.id ? (
+              <li key={destination.id} className="destinations-panel-confirm">
+                <span>Create a new destination like "{destinationLabel(destination)}"?</span>
+                <div className="destinations-panel-confirm-actions">
+                  <button type="button" onClick={() => startTemplate(destination)}>
+                    Create
+                  </button>
+                  <button type="button" onClick={() => setTemplatingId(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </li>
             ) : (
               <li key={destination.id}>
                 <button
                   type="button"
-                  disabled={disabled || !hasSelection || sendingId === destination.id}
+                  disabled={disabled || sendingId === destination.id}
                   title={`${destinationDescription(destination)} — ${
-                    hasSelection ? 'send the selected text here' : 'select text first'
+                    hasSelection
+                      ? 'send the selected text here'
+                      : 'click to create a new destination like this one'
                   }`}
-                  onClick={() => sendTo(destination)}
+                  onClick={() => handleRowClick(destination)}
                 >
                   {destinationLabel(destination)}
                 </button>
@@ -165,7 +216,10 @@ export function DestinationsPanel({ editor, disabled = false }: DestinationsPane
                   type="button"
                   className="destinations-panel-delete"
                   aria-label={`Delete ${destinationLabel(destination)}`}
-                  onClick={() => setConfirmingId(destination.id)}
+                  onClick={() => {
+                    setTemplatingId(null)
+                    setConfirmingId(destination.id)
+                  }}
                 >
                   ×
                 </button>

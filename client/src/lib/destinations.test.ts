@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { destinationDescription, destinationLabel, type SavedDestination } from './destinations'
+import {
+  destinationDescription,
+  destinationLabel,
+  sendErrorMessage,
+  type SavedDestination,
+} from './destinations'
 
 const GOOGLE_DOC: SavedDestination = {
   id: 'g1',
@@ -52,5 +57,23 @@ describe('destinationDescription', () => {
     expect(destinationDescription({ ...EMAIL, emailSubjectLabel: 'Family updates' })).toBe(
       'Email, mom@example.com, Family updates',
     )
+  })
+})
+
+describe('sendErrorMessage', () => {
+  it('appends the Google reconnect hint for a google-doc destination', () => {
+    expect(sendErrorMessage('Send failed', GOOGLE_DOC)).toBe(
+      'Send failed — try reconnecting Google (account menu, top right) if this keeps happening',
+    )
+  })
+
+  it('appends the Google reconnect hint for an email destination (Gmail is Google too)', () => {
+    expect(sendErrorMessage('Send failed', EMAIL)).toBe(
+      'Send failed — try reconnecting Google (account menu, top right) if this keeps happening',
+    )
+  })
+
+  it('leaves the error unchanged for a Dropbox destination', () => {
+    expect(sendErrorMessage('Send failed', DROPBOX_FILE)).toBe('Send failed')
   })
 })
