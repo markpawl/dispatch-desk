@@ -30,4 +30,33 @@ nothing is in flight. **The rules below survive every clear-out — never remove
 
 ## Plan
 
-_(none active)_
+### 1. IDEAS.md pending items 11-13 and 15 (small UI/model polish)
+
+Four small, independent fixes bundled as one group since each is trivial in size:
+- 11: a computed (not stored) "descriptive label" per destination, shown on hover
+- 12: rename the app title "Dispatch Desk" -> "Dispatch Desktop" (header + browser tab only, not
+  `package.json`/docs/repo name)
+- 13: distinct background colors for the sidebar's Channels vs. Destinations list items
+- 15: "start with existing" template no longer prefills `shortLabel`
+
+**Group A — all four** ✅
+- [x] `client/src/lib/destinations.ts`: new `destinationDescription(destination)` -- e.g. `"Email,
+      mom@example.com"`, `"Google Doc, Meeting Notes"`, `"Dropbox File, /notes.txt"` (channel name
+      + the type's underlying params; includes `emailSubjectLabel` when set)
+- [x] `client/src/components/DestinationsPanel.tsx`: a destination row's `title` combines
+      `destinationDescription()` with the existing selection hint; the Channels and Destinations
+      `<ul>`s each get a distinguishing className
+- [x] `client/src/App.css`: Channels list gets a distinct background (light blue tint, matching
+      the app's existing accent color); Destinations list keeps its current gray
+- [x] `client/src/App.tsx` (both `<h1>`s), `client/index.html` (`<title>`): "Dispatch Desk" ->
+      "Dispatch Desktop"
+- [x] `client/src/components/DestinationForm.tsx`: `applyTemplate` drops
+      `setShortLabel(template.shortLabel)` -- every other field still prefills as today
+- [x] Test updates: new `destinations.test.ts` (the description helper), `DestinationsPanel.test.tsx`
+      (row title includes the description), `App.test.tsx` (heading text), `DestinationForm.test.tsx`
+      (template no longer prefills shortLabel)
+- [x] `docs/IDEAS.md`: move Pending items 11, 12, 13, 15 to Addressed with short notes
+
+_(Done: commit `dcd33f1`. Also fixed a stray-timer test-hygiene issue in
+`sendToDestination.test.ts` (real Tiptap editors weren't being destroyed). Verified item 12/13
+visually in a local dev run. Tests + lint + typecheck + build all green.)_
